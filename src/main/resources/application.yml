@@ -1,0 +1,25 @@
+server:
+  port: 9192
+  servlet:
+    context-path: /api
+
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    driverClassName: "com.mysql.cj.jdbc.Driver"
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+aws:
+  accessKeyId: ${AWS_ACCESS_KEY_ID}
+  secretAccessKey: ${AWS_SECRET_ACCESS_KEY}
+  region: ${AWS_REGION}
+  s3:
+    bucketName: ${AWS_S3_BUCKET_NAME}
+
+jwt:
+  secret: ${JWT_SECRET}
+
