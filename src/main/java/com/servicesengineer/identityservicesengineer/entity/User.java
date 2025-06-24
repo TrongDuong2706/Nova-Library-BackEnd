@@ -21,6 +21,11 @@ public class User {
     private String firstName;
     private String lastName;
     private String studentCode;
+    private String email;
+    private String phoneNumber;
+
+    @Enumerated(EnumType.STRING)
+    private UserStatus status;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<FavoriteBook> favoriteBooks = new HashSet<>();

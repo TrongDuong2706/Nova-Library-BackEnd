@@ -1,5 +1,6 @@
 package com.servicesengineer.identityservicesengineer.dto.response;
 
+import com.servicesengineer.identityservicesengineer.entity.UserStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,11 +11,14 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 public class UserResponse {
-    String id;
-    String username;
-    String firstName;
-    String lastName;
+    private String id;
+    private String username;
+    private String firstName;
+    private String lastName;
     private String studentCode;
+    private String email;
+    private String phoneNumber;
+    private UserStatus status;
     Set<RoleResponse> roles;
 
 

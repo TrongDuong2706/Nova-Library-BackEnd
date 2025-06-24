@@ -16,4 +16,5 @@ public interface BookService {
     PaginatedResponse<BookResponse> getAllBookWithFilter(String authorName, String genreName, String title, String description , int page, int size);
     void softDelete(String id);
     long countActiveBooks();
+    PaginatedResponse<BookResponse> getAllBookWithAdminFilter(String authorName, String genreName, String title, Integer status, int page, int size);
 }

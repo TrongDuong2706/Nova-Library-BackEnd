@@ -22,8 +22,12 @@ public enum ErrorCode {
     INVALID_TOKEN(1016, "Token không hợp lệ", HttpStatus.BAD_REQUEST),
     TOKEN_EXPIRED(1017, "Token đã quá hạn", HttpStatus.BAD_REQUEST),
     USER_HAS_UNRETURNED_BORROWING(1018, "Bạn có đơn mượn chưa trả", HttpStatus.BAD_REQUEST),
+    INVALID_EMAIL_FORMAT(1019, "Email không đúng định dạng", HttpStatus.BAD_REQUEST),
+    DISABLE_ACCOUNT(1020, "Tài khoản đã bị vô hiệu hóa", HttpStatus.BAD_REQUEST),
 
     ;
+
+
 
 
 

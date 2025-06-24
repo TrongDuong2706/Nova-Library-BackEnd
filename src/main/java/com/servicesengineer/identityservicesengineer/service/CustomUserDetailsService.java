@@ -2,6 +2,7 @@ package com.servicesengineer.identityservicesengineer.service;
 
 
 import com.servicesengineer.identityservicesengineer.entity.User;
+import com.servicesengineer.identityservicesengineer.entity.UserStatus;
 import com.servicesengineer.identityservicesengineer.exception.AppException;
 import com.servicesengineer.identityservicesengineer.exception.ErrorCode;
 import com.servicesengineer.identityservicesengineer.repository.UserRepository;
@@ -30,6 +31,10 @@ public class CustomUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new AppException(ErrorCode.DISABLE_ACCOUNT);
+        }
 
         List<GrantedAuthority> authorities = user.getRoles().stream()
                 .map(role -> new SimpleGrantedAuthority("ROLE_"+role.getName()))

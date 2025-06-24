@@ -27,6 +27,12 @@ public class Book {
     @Column(name = "description")
     private String description;
 
+    @Column(name = "isbn", nullable = false, unique = true)
+    private String isbn;
+
+    @Column(name = "publication_date")
+    private LocalDate publicationDate;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "author_id")
     private Author author;

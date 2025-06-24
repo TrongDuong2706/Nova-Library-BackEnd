@@ -118,6 +118,8 @@ public class BorrowingServiceImpl implements BorrowingService {
                             .genre(genreResponse)
                             .createdAt(book.getCreatedAt())
                             .images(images)
+                            .publicationDate(book.getPublicationDate())
+                            .isbn(book.getIsbn())
                             .build();
                 })
                 .toList();
@@ -204,6 +206,8 @@ public class BorrowingServiceImpl implements BorrowingService {
                             .genre(genreResponse)
                             .createdAt(book.getCreatedAt())
                             .images(images)
+                            .isbn(book.getIsbn())
+                            .publicationDate(book.getPublicationDate())
                             .build();
                 }
         ).toList();
@@ -260,6 +264,8 @@ public class BorrowingServiceImpl implements BorrowingService {
                         .genre(genreResponse)
                         .createdAt(book.getCreatedAt())
                         .images(images)
+                        .publicationDate(book.getPublicationDate())
+                        .isbn(book.getIsbn())
                         .build();
             }).toList();
             UserResponse userResponse = UserResponse.builder()
@@ -326,6 +332,8 @@ public class BorrowingServiceImpl implements BorrowingService {
                     .genre(genreResponse)
                     .createdAt(book.getCreatedAt())
                     .images(images)
+                    .isbn(book.getIsbn())
+                    .publicationDate(book.getPublicationDate())
                     .build();
         }).toList();
 
@@ -395,6 +403,8 @@ public class BorrowingServiceImpl implements BorrowingService {
                         .genre(genreResponse)
                         .createdAt(book.getCreatedAt())
                         .images(images)
+                        .isbn(book.getIsbn())
+                        .publicationDate(book.getPublicationDate())
                         .build();
             }).toList();
 
@@ -473,6 +483,8 @@ public class BorrowingServiceImpl implements BorrowingService {
                         .genre(genreResponse)
                         .createdAt(book.getCreatedAt())
                         .images(images)
+                        .isbn(book.getIsbn())
+                        .publicationDate(book.getPublicationDate())
                         .build();
             }).toList();
 

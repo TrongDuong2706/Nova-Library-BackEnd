@@ -87,4 +87,21 @@ public class BookController {
                 .build();
     }
 
+    @GetMapping("/filterAdmin")
+    public ApiResponse<PaginatedResponse<BookResponse>> getAllBooksWithFilterAdmin(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String authorName,
+            @RequestParam(required = false) String genreName,
+            @RequestParam(required = false) String title,
+            @RequestParam(required = false) Integer status) {
+
+        int adjustedPage = Math.max(page - 1, 0);
+        var books = bookService.getAllBookWithAdminFilter(authorName, genreName, title, status, adjustedPage, size);
+        return ApiResponse.<PaginatedResponse<BookResponse>>builder()
+                .message("Get Books with filter successful")
+                .result(books)
+                .build();
+    }
+
 }

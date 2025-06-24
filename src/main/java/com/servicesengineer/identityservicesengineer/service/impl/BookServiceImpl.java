@@ -53,6 +53,8 @@ public class BookServiceImpl implements BookService {
                 .createdAt(java.time.LocalDate.now())
                 .stock(request.getStock())
                 .status(request.getStatus())
+                .isbn(request.getIsbn())
+                .publicationDate(request.getPublicationDate())
                 .build();
 
         // 3. Lưu Book để có ID
@@ -108,6 +110,8 @@ public class BookServiceImpl implements BookService {
                 .images(imageResponses)
                 .stock(book.getStock())
                 .status(book.getStatus())
+                .publicationDate(book.getPublicationDate())
+                .isbn(book.getIsbn())
                 .build();
     }
 //Get All Book
@@ -146,6 +150,8 @@ public class BookServiceImpl implements BookService {
                         .createdAt(book.getCreatedAt())
                         .images(imageResponses)
                         .status(book.getStatus())
+                        .isbn(book.getIsbn())
+                        .publicationDate(book.getPublicationDate())
                         .build();
             }
 
@@ -191,7 +197,8 @@ public class BookServiceImpl implements BookService {
                 .genre(genreResponse)
                 .createdAt(book.getCreatedAt())
                 .images(imageResponses)
-
+                .isbn(book.getIsbn())
+                .publicationDate(book.getPublicationDate())
                 .build();
     }
 
@@ -215,6 +222,8 @@ public class BookServiceImpl implements BookService {
         book.setGenre(genre);
         book.setStock(request.getStock());
         book.setStatus(request.getStatus());
+        book.setIsbn(request.getIsbn());
+        book.setPublicationDate(request.getPublicationDate());
 
         // 4. Nếu có ảnh mới => Xóa ảnh cũ
         if (files != null && files.stream().anyMatch(file -> !file.isEmpty())) {
@@ -281,6 +290,8 @@ public class BookServiceImpl implements BookService {
                 .createdAt(book.getCreatedAt())
                 .stock(book.getStock())
                 .images(imageResponses)
+                .publicationDate(book.getPublicationDate())
+                .isbn(book.getIsbn())
                 .build();
     }
 
@@ -318,6 +329,8 @@ public class BookServiceImpl implements BookService {
                             .createdAt(book.getCreatedAt())
                             .stock(book.getStock())
                             .images(imageResponses)
+                            .isbn(book.getIsbn())
+                            .publicationDate(book.getPublicationDate())
                             .build();
                 }
 
@@ -338,6 +351,54 @@ public class BookServiceImpl implements BookService {
     @Override
     public long countActiveBooks() {
         return bookRepository.countBooks();
+    }
+
+    @Override
+    public PaginatedResponse<BookResponse> getAllBookWithAdminFilter(String authorName, String genreName, String title, Integer status, int page, int size){
+        PageRequest pageRequest = PageRequest.of(page, size);
+        Page<Book> books = bookRepository.findByFilters(authorName, genreName, title, status, pageRequest);
+        var bookResponse = books.getContent().stream().map(
+                book -> {
+                    List<ImageResponse> imageResponses = book.getImages() != null
+                            ? book.getImages().stream()
+                            .map(image -> ImageResponse.builder()
+                                    .imageUrl(image.getUrl())
+                                    .build()).toList() : List.of();
+                    //Get Author
+                    AuthorResponse authorResponse = AuthorResponse.builder()
+                            .id(book.getAuthor().getId())
+                            .name(book.getAuthor().getName())
+                            .bio(book.getAuthor().getBio())
+                            .build();
+                    //Get Genre
+                    GenreResponse genreResponse = GenreResponse.builder()
+                            .id(book.getGenre().getId())
+                            .name(book.getGenre().getName())
+                            .description(book.getGenre().getDescription())
+                            .build();
+
+                    return BookResponse.builder()
+                            .id(book.getId())
+                            .title(book.getTitle())
+                            .description(book.getDescription())
+                            .author(authorResponse)
+                            .genre(genreResponse)
+                            .status(book.getStatus())
+                            .createdAt(book.getCreatedAt())
+                            .stock(book.getStock())
+                            .images(imageResponses)
+                            .isbn(book.getIsbn())
+                            .publicationDate(book.getPublicationDate())
+                            .build();
+                }
+
+        ).toList();
+        return PaginatedResponse.<BookResponse>builder()
+                .elements(bookResponse)
+                .currentPage(books.getNumber())
+                .totalItems((int) books.getTotalElements())
+                .totalPages(books.getTotalPages())
+                .build();
     }
 
 }

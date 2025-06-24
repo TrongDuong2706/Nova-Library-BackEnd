@@ -15,12 +15,12 @@ public class BookResponse {
     String id;
     String title;
     String description;
-//    String authorId;
-//    String genreId;
     AuthorResponse author;
     GenreResponse genre;
     LocalDate createdAt;
     int stock;
     int status;
+    String isbn;
+    LocalDate publicationDate;
     List<ImageResponse> images;
 }
