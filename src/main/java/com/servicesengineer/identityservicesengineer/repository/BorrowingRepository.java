@@ -31,5 +31,15 @@ public interface BorrowingRepository extends JpaRepository<Borrowing, String> {
             @Param("borrowDate") LocalDate borrowDate,
             Pageable pageable);
     boolean existsByUserAndStatusIn(User user, List<BorrowingStatus> statuses);
+    //Lấy các status
+    List<Borrowing> findByStatusAndDueDateBefore(BorrowingStatus status, LocalDate date);
+
+    Page<Borrowing> findByStatus(BorrowingStatus status, Pageable pageable);
+
+    List<Borrowing> findByStatusAndDueDate(BorrowingStatus status, LocalDate dueDate);
+
+
+
+
 
 }

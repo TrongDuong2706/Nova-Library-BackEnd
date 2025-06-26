@@ -1,5 +1,6 @@
 package com.servicesengineer.identityservicesengineer.service;
 
+import com.servicesengineer.identityservicesengineer.dto.request.EditUserRequest;
 import com.servicesengineer.identityservicesengineer.dto.request.UserRequest;
 import com.servicesengineer.identityservicesengineer.dto.response.PaginatedResponse;
 import com.servicesengineer.identityservicesengineer.dto.response.UserResponse;
@@ -12,4 +13,7 @@ public interface UserService {
     UserResponse addUser(UserRequest userRequest);
     UserResponse getMyInfor();
     PaginatedResponse<UserResponse> getAllUserWithFilter(String name, String studentCode, String phoneNumber, int page, int size);
+    UserResponse updateUser (String userId, EditUserRequest userRequest);
+    UserResponse getOneUser(String userId);
+    void softDeleteUser(String userId);
 }

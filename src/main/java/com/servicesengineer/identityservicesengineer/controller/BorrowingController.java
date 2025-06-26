@@ -1,6 +1,7 @@
 package com.servicesengineer.identityservicesengineer.controller;
 
 import com.servicesengineer.identityservicesengineer.dto.ApiResponse;
+import com.servicesengineer.identityservicesengineer.dto.request.BookRenewalRequest;
 import com.servicesengineer.identityservicesengineer.dto.request.BorrowingRequest;
 import com.servicesengineer.identityservicesengineer.dto.response.BorrowingResponse;
 import com.servicesengineer.identityservicesengineer.dto.response.PaginatedResponse;
@@ -94,4 +95,31 @@ public class BorrowingController {
                 .result(borrowingService.getAllBorrowWithFilter(id, name, borrowDate, adjustedPage, size))
                 .build();
     }
+    @PutMapping("/extends/{borrowId}")
+    public ApiResponse<Void> bookRenewal(@PathVariable String borrowId, @RequestBody BookRenewalRequest request){
+        borrowingService.bookRenewal(borrowId, request);
+        return ApiResponse.<Void>builder()
+                .message("Book Renewal successful")
+                .result(null)
+                .build();
+    }
+    @PostMapping("/update-overdue-now")
+    public ApiResponse<Void> updateOverdueNow() {
+        borrowingService.updateOverdueStatuses();
+        return ApiResponse.<Void>builder()
+                .message("Update status successful")
+                .result(null)
+                .build();
+    }
+    @GetMapping("/getOverDueStatus")
+    public ApiResponse<PaginatedResponse<BorrowingResponse>> getAllBorrowOverDueStatus(@RequestParam(defaultValue = "1") int page,
+                                                                                       @RequestParam(defaultValue = "10") int size){
+        int adjustedPage = Math.max(page - 1, 0);
+        return ApiResponse.<PaginatedResponse<BorrowingResponse>>builder()
+                .message("Get all overdue borrow successful")
+                .result(borrowingService.getAllBorrowWithOverdueStatus(adjustedPage,size))
+                .build();
+    }
+
+
 }

@@ -1,6 +1,7 @@
 package com.servicesengineer.identityservicesengineer.service.impl;
 
 import com.servicesengineer.identityservicesengineer.constant.PredefinedRole;
+import com.servicesengineer.identityservicesengineer.dto.request.EditUserRequest;
 import com.servicesengineer.identityservicesengineer.dto.request.UserRequest;
 import com.servicesengineer.identityservicesengineer.dto.response.PaginatedResponse;
 import com.servicesengineer.identityservicesengineer.dto.response.PermissionResponse;
@@ -195,6 +196,83 @@ public class UserServiceImpl implements UserService {
                 .pageSize(users.getSize())
                 .elements(userResponses)
                 .build();
+    }
+    @Override
+    public UserResponse updateUser (String userId, EditUserRequest request){
+        User user = userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        user.setPhoneNumber(request.getPhoneNumber());
+        user.setEmail(request.getEmail());
+        user.setFirstName(request.getFirstName());
+        user.setLastName(request.getLastName());
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+        }
+        if (request.getRoleName() != null && !request.getRoleName().isBlank()) {
+            Role role = roleRepository.findById(request.getRoleName())
+                    .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
+
+            user.setRoles(new HashSet<>(Set.of(role)));  // 👈 Dùng HashSet thay vì Collections.singleton
+        }
+
+        user = userRepository.save(user);
+
+        // Map User -> UserResponse
+        return UserResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .studentCode(user.getStudentCode())
+                .email(user.getEmail())
+                .phoneNumber(user.getPhoneNumber())
+                .status(user.getStatus())
+                .roles(user.getRoles().stream()
+                        .map(role -> RoleResponse.builder()
+                                .name(role.getName())
+                                .description(role.getDescription())
+                                .build())
+                        .collect(Collectors.toSet())
+                )
+                .build();
+    }
+    @Override
+    public UserResponse getOneUser(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        Set<RoleResponse> roleResponses = user.getRoles().stream()
+                .map(role -> {
+                    Set<PermissionResponse> permissionResponses = role.getPermissions().stream()
+                            .map(permission -> new PermissionResponse(
+                                    permission.getName(),
+                                    permission.getDescription()))
+                            .collect(Collectors.toSet());
+
+                    return new RoleResponse(
+                            role.getName(),
+                            role.getDescription(),
+                            permissionResponses
+                    );
+                })
+                .collect(Collectors.toSet());
+
+        return UserResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .studentCode(user.getStudentCode())
+                .email(user.getEmail())
+                .phoneNumber(user.getPhoneNumber())
+                .status(user.getStatus())
+                .roles(roleResponses)
+                .build();
+    }
+    @Override
+    public void softDeleteUser(String userId){
+        User user = userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        user.setStatus(UserStatus.DELETED);
+        userRepository.save(user);
     }
 
 }

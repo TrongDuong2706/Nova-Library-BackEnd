@@ -103,5 +103,14 @@ public class BookController {
                 .result(books)
                 .build();
     }
+    @GetMapping("/getAllBookZeroStock")
+    public ApiResponse<PaginatedResponse<BookResponse>> getAllBookWithZeroStock(@RequestParam(defaultValue = "1") int page,
+                                                                                @RequestParam(defaultValue = "10") int size){
+        int adjustedPage = Math.max(page - 1, 0);
+        return ApiResponse.<PaginatedResponse<BookResponse>>builder()
+                .message("Get All Book With Zero Stock Successful")
+                .result(bookService.getAllBookZeroStock(adjustedPage,size))
+                .build();
+    }
 
 }

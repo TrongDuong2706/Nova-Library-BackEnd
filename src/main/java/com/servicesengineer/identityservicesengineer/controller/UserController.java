@@ -1,6 +1,7 @@
 package com.servicesengineer.identityservicesengineer.controller;
 
 import com.servicesengineer.identityservicesengineer.dto.ApiResponse;
+import com.servicesengineer.identityservicesengineer.dto.request.EditUserRequest;
 import com.servicesengineer.identityservicesengineer.dto.request.UserRequest;
 import com.servicesengineer.identityservicesengineer.dto.response.PaginatedResponse;
 import com.servicesengineer.identityservicesengineer.dto.response.UserResponse;
@@ -60,6 +61,27 @@ public class UserController {
         return ApiResponse.<PaginatedResponse<UserResponse>>builder()
                 .message("Get All User with filter successful")
                 .result(userService.getAllUserWithFilter(name, studentCode, phoneNumber, adjustedPage, size))
+                .build();
+    }
+    @PutMapping("/{userId}")
+    ApiResponse<UserResponse> updateUser(@PathVariable String userId, @RequestBody EditUserRequest request){
+        return ApiResponse.<UserResponse>builder()
+                .result(userService.updateUser(userId, request))
+                .build();
+    }
+    @GetMapping("/{userId}")
+    ApiResponse<UserResponse> getOneUser(@PathVariable String userId){
+        return ApiResponse.<UserResponse>builder()
+                .message("Get one user successful")
+                .result(userService.getOneUser(userId))
+                .build();
+    }
+    @PutMapping("/softDelete/{userId}")
+    ApiResponse<Void> deleteUser(@PathVariable String userId){
+        userService.softDeleteUser(userId);
+        return ApiResponse.<Void>builder()
+                .message("Delete Successful")
+                .result(null)
                 .build();
     }
 }

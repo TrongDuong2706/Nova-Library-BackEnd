@@ -17,4 +17,5 @@ public interface BookService {
     void softDelete(String id);
     long countActiveBooks();
     PaginatedResponse<BookResponse> getAllBookWithAdminFilter(String authorName, String genreName, String title, Integer status, int page, int size);
+    PaginatedResponse<BookResponse> getAllBookZeroStock(int page, int size);
 }

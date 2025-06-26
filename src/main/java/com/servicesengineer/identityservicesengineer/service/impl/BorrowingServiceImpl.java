@@ -1,5 +1,6 @@
 package com.servicesengineer.identityservicesengineer.service.impl;
 
+import com.servicesengineer.identityservicesengineer.dto.request.BookRenewalRequest;
 import com.servicesengineer.identityservicesengineer.dto.request.BorrowingRequest;
 import com.servicesengineer.identityservicesengineer.dto.response.*;
 import com.servicesengineer.identityservicesengineer.entity.*;
@@ -17,6 +18,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
@@ -49,6 +51,23 @@ public class BorrowingServiceImpl implements BorrowingService {
 
         if (hasUnreturnedBorrow) {
             throw new AppException(ErrorCode.USER_HAS_UNRETURNED_BORROWING);
+        }
+
+        if (request.getBookIds().size() > 3) {
+            throw new AppException(ErrorCode.EXCEED_BOOK_QUANTITY_BORROW);
+        }
+
+        //Check hạn mượn không quá 14 ngày
+        LocalDate borrowDate = LocalDate.now();
+        LocalDate dueDate = request.getDueDate();
+
+        if (dueDate == null || dueDate.isBefore(borrowDate)) {
+            throw new AppException(ErrorCode.INVALID_DUE_DATE);
+        }
+
+        long days = ChronoUnit.DAYS.between(borrowDate, dueDate);
+        if (days > 14) {
+            throw new AppException(ErrorCode.BORROW_PERIOD_EXCEEDS_LIMIT);
         }
 
         // 2. Tạo phiếu mượn mới
@@ -517,6 +536,113 @@ public class BorrowingServiceImpl implements BorrowingService {
                 .build();
     }
 
+    @Override
+    public void bookRenewal(String borrowId, BookRenewalRequest bookRenewalRequest) {
+        Borrowing borrowing = borrowingRepository.findById(borrowId)
+                .orElseThrow(() -> new AppException(ErrorCode.BORROW_NOT_EXISTED));
 
+        if (bookRenewalRequest.getNewDueDate() == null || bookRenewalRequest.getNewDueDate().isBefore(LocalDate.now())) {
+            throw new AppException(ErrorCode.INVALID_DUE_DATE);
+        }
+        if (borrowing.getStatus() == BorrowingStatus.RETURNED) {
+            throw new AppException(ErrorCode.BORROWING_ALREADY_RETURNED);
+        }
+
+        if (borrowing.getStatus() == BorrowingStatus.OVERDUE) {
+            throw new AppException(ErrorCode.OVERDUE_ALREADY);
+        }
+
+        LocalDate borrowDate = borrowing.getBorrowDate();
+        long totalDays = ChronoUnit.DAYS.between(borrowDate, bookRenewalRequest.getNewDueDate());
+
+        if (totalDays > 30) {
+            throw new AppException(ErrorCode.BORROW_RENEWAL_EXCEEDS_LIMIT);
+        }
+
+        borrowing.setDueDate(bookRenewalRequest.getNewDueDate());
+        borrowingRepository.save(borrowing);
+    }
+    @Override
+    @Scheduled(cron = "0 0 0 * * ?") // chạy mỗi ngày lúc 0h00
+    @Transactional
+    public void updateOverdueStatuses() {
+        LocalDate today = LocalDate.now();
+        List<Borrowing> overdueBorrowings = borrowingRepository
+                .findByStatusAndDueDateBefore(BorrowingStatus.BORROWED, today);
+
+        for (Borrowing borrowing : overdueBorrowings) {
+            borrowing.setStatus(BorrowingStatus.OVERDUE);
+        }
+
+        borrowingRepository.saveAll(overdueBorrowings);
+    }
+
+    @Override
+    public PaginatedResponse<BorrowingResponse> getAllBorrowWithOverdueStatus(int page, int size) {
+        PageRequest pageRequest = PageRequest.of(page, size);
+        Page<Borrowing> borrowings = borrowingRepository.findByStatus(BorrowingStatus.OVERDUE, pageRequest);
+
+        List<BorrowingResponse> borrowResponses = borrowings.getContent().stream().map(borrowing -> {
+            List<BookResponse> bookResponses = borrowing.getItems().stream().map(item -> {
+                Book book = item.getBook();
+                List<ImageResponse> images = book.getImages() != null
+                        ? book.getImages().stream()
+                        .map(img -> ImageResponse.builder()
+                                .imageUrl(img.getUrl())
+                                .build())
+                        .toList()
+                        : List.of();
+                AuthorResponse authorResponse = AuthorResponse.builder()
+                        .id(book.getAuthor().getId())
+                        .name(book.getAuthor().getName())
+                        .bio(book.getAuthor().getBio())
+                        .build();
+                GenreResponse genreResponse = GenreResponse.builder()
+                        .id(book.getGenre().getId())
+                        .name(book.getGenre().getName())
+                        .description(book.getGenre().getDescription())
+                        .build();
+
+                return BookResponse.builder()
+                        .id(book.getId())
+                        .title(book.getTitle())
+                        .description(book.getDescription())
+                        .author(authorResponse)
+                        .genre(genreResponse)
+                        .createdAt(book.getCreatedAt())
+                        .images(images)
+                        .publicationDate(book.getPublicationDate())
+                        .isbn(book.getIsbn())
+                        .build();
+            }).toList();
+
+            UserResponse userResponse = UserResponse.builder()
+                    .firstName(borrowing.getUser().getFirstName())
+                    .lastName(borrowing.getUser().getLastName())
+                    .studentCode(borrowing.getUser().getStudentCode())
+                    .build();
+
+            return BorrowingResponse.builder()
+                    .id(borrowing.getId())
+                    .borrowDate(borrowing.getBorrowDate())
+                    .dueDate(borrowing.getDueDate())
+                    .returnDate(borrowing.getReturnDate())
+                    .finalAmount(borrowing.getFinalAmount())
+                    .status(borrowing.getStatus())
+                    .userResponse(userResponse)
+                    .books(bookResponses)
+                    .build();
+        }).toList();
+
+        return PaginatedResponse.<BorrowingResponse>builder()
+                .totalItems((int) borrowings.getTotalElements())
+                .totalPages(borrowings.getTotalPages())
+                .currentPage(borrowings.getNumber())
+                .pageSize(borrowings.getSize())
+                .hasNextPage(borrowings.hasNext())
+                .hasPreviousPage(borrowings.hasPrevious())
+                .elements(borrowResponses)
+                .build();
+    }
 
 }

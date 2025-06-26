@@ -1,5 +1,6 @@
 package com.servicesengineer.identityservicesengineer.service;
 
+import com.servicesengineer.identityservicesengineer.dto.request.BookRenewalRequest;
 import com.servicesengineer.identityservicesengineer.dto.request.BorrowingRequest;
 import com.servicesengineer.identityservicesengineer.dto.response.BorrowingResponse;
 import com.servicesengineer.identityservicesengineer.dto.response.PaginatedResponse;
@@ -16,4 +17,7 @@ public interface BorrowingService {
     long countBorrow();
     long countOverdue();
     PaginatedResponse<BorrowingResponse> getAllBorrowWithFilter(String id, String name, LocalDate borrowDate, int page, int size);
+    void bookRenewal(String borrowId, BookRenewalRequest bookRenewalRequest);
+    void updateOverdueStatuses();
+    PaginatedResponse<BorrowingResponse> getAllBorrowWithOverdueStatus(int page, int size);
 }

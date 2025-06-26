@@ -1,7 +1,9 @@
 package com.servicesengineer.identityservicesengineer.dto.response;
 
-import java.util.Set;
+import lombok.Builder;
 
+import java.util.Set;
+@Builder
 public class RoleResponse {
     private String name;
     private String description;

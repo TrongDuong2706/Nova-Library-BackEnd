@@ -401,4 +401,52 @@ public class BookServiceImpl implements BookService {
                 .build();
     }
 
+    @Override
+    public PaginatedResponse<BookResponse> getAllBookZeroStock(int page, int size){
+        PageRequest pageRequest = PageRequest.of(page,size);
+        Page<Book> books = bookRepository.findByStock(0, pageRequest);
+        var bookResponse = books.getContent().stream().map(
+                book -> {
+                    List<ImageResponse> imageResponses = book.getImages() != null
+                            ? book.getImages().stream()
+                            .map(image -> ImageResponse.builder()
+                                    .imageUrl(image.getUrl())
+                                    .build()).toList() : List.of();
+                    //Get Author
+                    AuthorResponse authorResponse = AuthorResponse.builder()
+                            .id(book.getAuthor().getId())
+                            .name(book.getAuthor().getName())
+                            .bio(book.getAuthor().getBio())
+                            .build();
+                    //Get Genre
+                    GenreResponse genreResponse = GenreResponse.builder()
+                            .id(book.getGenre().getId())
+                            .name(book.getGenre().getName())
+                            .description(book.getGenre().getDescription())
+                            .build();
+
+                    return BookResponse.builder()
+                            .id(book.getId())
+                            .title(book.getTitle())
+                            .description(book.getDescription())
+                            .author(authorResponse)
+                            .genre(genreResponse)
+                            .stock(book.getStock())
+                            .createdAt(book.getCreatedAt())
+                            .images(imageResponses)
+                            .status(book.getStatus())
+                            .isbn(book.getIsbn())
+                            .publicationDate(book.getPublicationDate())
+                            .build();
+                }
+
+        ).toList();
+        return PaginatedResponse.<BookResponse>builder()
+                .elements(bookResponse)
+                .currentPage(books.getNumber())
+                .totalItems((int) books.getTotalElements())
+                .totalPages(books.getTotalPages())
+                .build();
+    }
+
 }

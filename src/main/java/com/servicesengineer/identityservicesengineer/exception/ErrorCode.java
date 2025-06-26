@@ -11,11 +11,11 @@ public enum ErrorCode {
     USER_NOT_EXISTED(1005, "User không tồn tại", HttpStatus.BAD_REQUEST),
     WRONG_INPUT_TYPE(1006, "Nhập sai kiểu dữ liệu", HttpStatus.BAD_REQUEST),
     UNAUTHENTICATED(1007, "Unauthenticated", HttpStatus.UNAUTHORIZED),
-    AUTHOR_NOT_EXISTED(1008, "Author not existed", HttpStatus.NOT_FOUND),
+    AUTHOR_NOT_EXISTED(1008, "Tác giả không tồn tại", HttpStatus.NOT_FOUND),
     GENRE_NOT_EXISTED(1009, "Genre not existed", HttpStatus.NOT_FOUND),
     BOOK_NOT_EXISTED(1010, "Book not existed", HttpStatus.NOT_FOUND),
     BORROW_NOT_EXISTED(1011, "Borrow Id not existed", HttpStatus.NOT_FOUND),
-    BORROWING_ALREADY_RETURNED(1012, "Borrowing already returned", HttpStatus.BAD_REQUEST),
+    BORROWING_ALREADY_RETURNED(1012, "Đơn mượn đã được trả", HttpStatus.BAD_REQUEST),
     USERNAME_HAS_EXISTED(1013, "Username already exists", HttpStatus.BAD_REQUEST),
     BOOK_OUT_OF_STOCK(1014, "Số lượng sách trong kho không đủ", HttpStatus.BAD_REQUEST),
     ALREADY_FAVORITED(1015, "Sách đã nằm trong mục yêu thích", HttpStatus.BAD_REQUEST),
@@ -24,12 +24,14 @@ public enum ErrorCode {
     USER_HAS_UNRETURNED_BORROWING(1018, "Bạn có đơn mượn chưa trả", HttpStatus.BAD_REQUEST),
     INVALID_EMAIL_FORMAT(1019, "Email không đúng định dạng", HttpStatus.BAD_REQUEST),
     DISABLE_ACCOUNT(1020, "Tài khoản đã bị vô hiệu hóa", HttpStatus.BAD_REQUEST),
+    ROLE_NOT_FOUND(1021, "Role không tồn tại", HttpStatus.BAD_REQUEST),
+    INVALID_DUE_DATE(1022, "Ngày trả không hợp lệ", HttpStatus.BAD_REQUEST),
+    BORROW_PERIOD_EXCEEDS_LIMIT(1023, "Chỉ được mượn trong vòng 14 ngày", HttpStatus.BAD_REQUEST),
+    BORROW_RENEWAL_EXCEEDS_LIMIT(1024, "Gia hạn không được vượt quá 30 ngày kể từ ngày mượn", HttpStatus.BAD_REQUEST),
+    EXCEED_BOOK_QUANTITY_BORROW(1025, "Chỉ được mượn tối đa 3 sách", HttpStatus.BAD_REQUEST),
+    OVERDUE_ALREADY(1026, "Đơn mượn của bạn đã quá hạn", HttpStatus.BAD_REQUEST),
 
     ;
-
-
-
-
 
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

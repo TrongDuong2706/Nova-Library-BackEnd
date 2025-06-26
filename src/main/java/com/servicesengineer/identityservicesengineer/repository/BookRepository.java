@@ -40,4 +40,6 @@ public interface BookRepository extends JpaRepository<Book, String> {
     @Query("SELECT COUNT(b) FROM Book b")
     long countBooks();
 
+    Page<Book> findByStock(int stock, Pageable pageable);
+
 }
