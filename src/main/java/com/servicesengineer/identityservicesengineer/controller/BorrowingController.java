@@ -121,5 +121,17 @@ public class BorrowingController {
                 .build();
     }
 
+    @GetMapping("/getAllBorrowWithUser/{userId}")
+    public ApiResponse<PaginatedResponse<BorrowingResponse>> getAllBorrowWithUser(@PathVariable String userId,
+                                                                                  @RequestParam(defaultValue = "1") int page,
+                                                                                  @RequestParam(defaultValue = "10") int size
+    ){
+        int adjustedPage = Math.max(page - 1, 0);
+        return ApiResponse.<PaginatedResponse<BorrowingResponse>>builder()
+                .message("Get all borrow By UserId")
+                .result(borrowingService.getAllBorrowByUserId(userId,adjustedPage,size))
+                .build();
+    }
+
 
 }

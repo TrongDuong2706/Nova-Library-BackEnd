@@ -40,6 +40,7 @@ public class Book {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "genre_id")
     private Genre genre;
+
     @Column(name ="stock")
     private int stock;
 

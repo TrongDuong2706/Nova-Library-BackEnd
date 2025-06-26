@@ -19,6 +19,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -36,6 +37,7 @@ public class BookServiceImpl implements BookService {
     GenreRepository genreRepository;
    // AuthorMapper authorMapper;
     @Override
+    @PreAuthorize("hasRole('ADMIN')")
     public BookResponse createBook(BookRequest request, List<MultipartFile> files) {
         // 1. Tìm Author và Genre
         Author author = authorRepository.findById(request.getAuthorId())
@@ -43,6 +45,15 @@ public class BookServiceImpl implements BookService {
 
         Genre genre = genreRepository.findById(request.getGenreId())
                 .orElseThrow(() -> new AppException((ErrorCode.GENRE_NOT_EXISTED)));
+
+        if(request.getStock() < 0){
+            throw new AppException(ErrorCode.BOOK_QUANTITY_SMALLER_THAN_ZERO);
+        }
+
+        if (bookRepository.existsByIsbn(request.getIsbn())) {
+            throw new AppException(ErrorCode.ISBN_VALIDATE);
+        }
+
 
         // 2. Tạo Book (chưa gán ảnh)
         Book book = Book.builder()
@@ -204,6 +215,7 @@ public class BookServiceImpl implements BookService {
 
     //Update Book function
     @Override
+    @PreAuthorize("hasRole('ADMIN')")
     public BookResponse updateBook(String bookId, BookRequest request, List<MultipartFile> files) {
         // 1. Lấy Book
         Book book = bookRepository.findById(bookId)
@@ -214,6 +226,14 @@ public class BookServiceImpl implements BookService {
                 .orElseThrow(() -> new AppException(ErrorCode.AUTHOR_NOT_EXISTED));
         Genre genre = genreRepository.findById(request.getGenreId())
                 .orElseThrow(() -> new AppException(ErrorCode.GENRE_NOT_EXISTED));
+
+        if(request.getStock() < 0){
+            throw new AppException(ErrorCode.BOOK_QUANTITY_SMALLER_THAN_ZERO);
+        }
+
+        if (bookRepository.existsByIsbn(request.getIsbn())) {
+            throw new AppException(ErrorCode.ISBN_VALIDATE);
+        }
 
         // 3. Cập nhật thông tin cơ bản
         book.setTitle(request.getTitle());
@@ -343,6 +363,7 @@ public class BookServiceImpl implements BookService {
                 .build();
     }
     @Override
+    @PreAuthorize("hasRole('ADMIN')")
     public void softDelete(String id){
         Book book = bookRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_EXISTED));
         book.setStatus(0);
@@ -448,5 +469,57 @@ public class BookServiceImpl implements BookService {
                 .totalPages(books.getTotalPages())
                 .build();
     }
+
+    @Override
+    public PaginatedResponse<BookResponse> getAllBookWithGenre(String genreName, int page, int size) {
+        PageRequest pageRequest = PageRequest.of(page, size);
+        Page<Book> books = bookRepository.findBooksByGenreName(genreName, pageRequest);
+
+        var bookResponse = books.getContent().stream().map(
+                book -> {
+                    List<ImageResponse> imageResponses = book.getImages() != null
+                            ? book.getImages().stream()
+                            .map(image -> ImageResponse.builder()
+                                    .imageUrl(image.getUrl())
+                                    .build())
+                            .toList()
+                            : List.of();
+
+                    AuthorResponse authorResponse = AuthorResponse.builder()
+                            .id(book.getAuthor().getId())
+                            .name(book.getAuthor().getName())
+                            .bio(book.getAuthor().getBio())
+                            .build();
+
+                    GenreResponse genreResponse = GenreResponse.builder()
+                            .id(book.getGenre().getId())
+                            .name(book.getGenre().getName())
+                            .description(book.getGenre().getDescription())
+                            .build();
+
+                    return BookResponse.builder()
+                            .id(book.getId())
+                            .title(book.getTitle())
+                            .description(book.getDescription())
+                            .author(authorResponse)
+                            .genre(genreResponse)
+                            .stock(book.getStock())
+                            .createdAt(book.getCreatedAt())
+                            .images(imageResponses)
+                            .status(book.getStatus())
+                            .isbn(book.getIsbn())
+                            .publicationDate(book.getPublicationDate())
+                            .build();
+                }
+        ).toList();
+
+        return PaginatedResponse.<BookResponse>builder()
+                .elements(bookResponse)
+                .currentPage(books.getNumber())
+                .totalItems((int) books.getTotalElements())
+                .totalPages(books.getTotalPages())
+                .build();
+    }
+
 
 }

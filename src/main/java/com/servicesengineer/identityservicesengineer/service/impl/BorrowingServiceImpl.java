@@ -48,6 +48,9 @@ public class BorrowingServiceImpl implements BorrowingService {
                 user,
                 List.of(BorrowingStatus.BORROWED, BorrowingStatus.OVERDUE)
         );
+        if(user.getStatus().equals(UserStatus.DELETED)){
+            throw new AppException(ErrorCode.DISABLE_ACCOUNT);
+        }
 
         if (hasUnreturnedBorrow) {
             throw new AppException(ErrorCode.USER_HAS_UNRETURNED_BORROWING);
@@ -582,6 +585,72 @@ public class BorrowingServiceImpl implements BorrowingService {
         PageRequest pageRequest = PageRequest.of(page, size);
         Page<Borrowing> borrowings = borrowingRepository.findByStatus(BorrowingStatus.OVERDUE, pageRequest);
 
+        List<BorrowingResponse> borrowResponses = borrowings.getContent().stream().map(borrowing -> {
+            List<BookResponse> bookResponses = borrowing.getItems().stream().map(item -> {
+                Book book = item.getBook();
+                List<ImageResponse> images = book.getImages() != null
+                        ? book.getImages().stream()
+                        .map(img -> ImageResponse.builder()
+                                .imageUrl(img.getUrl())
+                                .build())
+                        .toList()
+                        : List.of();
+                AuthorResponse authorResponse = AuthorResponse.builder()
+                        .id(book.getAuthor().getId())
+                        .name(book.getAuthor().getName())
+                        .bio(book.getAuthor().getBio())
+                        .build();
+                GenreResponse genreResponse = GenreResponse.builder()
+                        .id(book.getGenre().getId())
+                        .name(book.getGenre().getName())
+                        .description(book.getGenre().getDescription())
+                        .build();
+
+                return BookResponse.builder()
+                        .id(book.getId())
+                        .title(book.getTitle())
+                        .description(book.getDescription())
+                        .author(authorResponse)
+                        .genre(genreResponse)
+                        .createdAt(book.getCreatedAt())
+                        .images(images)
+                        .publicationDate(book.getPublicationDate())
+                        .isbn(book.getIsbn())
+                        .build();
+            }).toList();
+
+            UserResponse userResponse = UserResponse.builder()
+                    .firstName(borrowing.getUser().getFirstName())
+                    .lastName(borrowing.getUser().getLastName())
+                    .studentCode(borrowing.getUser().getStudentCode())
+                    .build();
+
+            return BorrowingResponse.builder()
+                    .id(borrowing.getId())
+                    .borrowDate(borrowing.getBorrowDate())
+                    .dueDate(borrowing.getDueDate())
+                    .returnDate(borrowing.getReturnDate())
+                    .finalAmount(borrowing.getFinalAmount())
+                    .status(borrowing.getStatus())
+                    .userResponse(userResponse)
+                    .books(bookResponses)
+                    .build();
+        }).toList();
+
+        return PaginatedResponse.<BorrowingResponse>builder()
+                .totalItems((int) borrowings.getTotalElements())
+                .totalPages(borrowings.getTotalPages())
+                .currentPage(borrowings.getNumber())
+                .pageSize(borrowings.getSize())
+                .hasNextPage(borrowings.hasNext())
+                .hasPreviousPage(borrowings.hasPrevious())
+                .elements(borrowResponses)
+                .build();
+    }
+    @Override
+    public PaginatedResponse<BorrowingResponse> getAllBorrowByUserId(String userId, int page, int size){
+        PageRequest pageRequest = PageRequest.of(page, size);
+        Page<Borrowing> borrowings = borrowingRepository.findByUserId(userId, pageRequest);
         List<BorrowingResponse> borrowResponses = borrowings.getContent().stream().map(borrowing -> {
             List<BookResponse> bookResponses = borrowing.getItems().stream().map(item -> {
                 Book book = item.getBook();

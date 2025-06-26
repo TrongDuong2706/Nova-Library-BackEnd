@@ -38,6 +38,7 @@ public interface BorrowingRepository extends JpaRepository<Borrowing, String> {
 
     List<Borrowing> findByStatusAndDueDate(BorrowingStatus status, LocalDate dueDate);
 
+    Page<Borrowing> findByUserId(String userId, Pageable pageable);
 
 
 

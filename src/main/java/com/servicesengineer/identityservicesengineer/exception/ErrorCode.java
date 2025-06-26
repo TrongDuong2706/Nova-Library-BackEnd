@@ -30,7 +30,10 @@ public enum ErrorCode {
     BORROW_RENEWAL_EXCEEDS_LIMIT(1024, "Gia hạn không được vượt quá 30 ngày kể từ ngày mượn", HttpStatus.BAD_REQUEST),
     EXCEED_BOOK_QUANTITY_BORROW(1025, "Chỉ được mượn tối đa 3 sách", HttpStatus.BAD_REQUEST),
     OVERDUE_ALREADY(1026, "Đơn mượn của bạn đã quá hạn", HttpStatus.BAD_REQUEST),
-
+    BOOK_QUANTITY_SMALLER_THAN_ZERO(1027, "Số lượng sách không được âm", HttpStatus.BAD_REQUEST),
+    PASSWORD_LENGTH_ERROR(1028, "Mật khẩu phải có ít nhất 8 ký tự", HttpStatus.BAD_REQUEST),
+    PASSWORD_VALIDATE(1029, "Mật khẩu phải có cả chữ cả số", HttpStatus.BAD_REQUEST),
+    ISBN_VALIDATE(1030, "ISBN không được trùng", HttpStatus.BAD_REQUEST),
     ;
 
 

@@ -20,4 +20,5 @@ public interface BorrowingService {
     void bookRenewal(String borrowId, BookRenewalRequest bookRenewalRequest);
     void updateOverdueStatuses();
     PaginatedResponse<BorrowingResponse> getAllBorrowWithOverdueStatus(int page, int size);
+    PaginatedResponse<BorrowingResponse> getAllBorrowByUserId(String userId, int page, int size);
 }

@@ -9,13 +9,22 @@ import java.util.List;
 
 public interface BookService {
     BookResponse createBook(BookRequest request, List<MultipartFile> files);
+
     PaginatedResponse<BookResponse> getAllBook(int page, int size);
-    BookResponse getOneBook (String id);
+
+    BookResponse getOneBook(String id);
+
     BookResponse updateBook(String id, BookRequest request, List<MultipartFile> files);
 
-    PaginatedResponse<BookResponse> getAllBookWithFilter(String authorName, String genreName, String title, String description , int page, int size);
+    PaginatedResponse<BookResponse> getAllBookWithFilter(String authorName, String genreName, String title, String description, int page, int size);
+
     void softDelete(String id);
+
     long countActiveBooks();
+
     PaginatedResponse<BookResponse> getAllBookWithAdminFilter(String authorName, String genreName, String title, Integer status, int page, int size);
+
     PaginatedResponse<BookResponse> getAllBookZeroStock(int page, int size);
+
+    PaginatedResponse<BookResponse> getAllBookWithGenre(String genreName, int page, int size);
 }

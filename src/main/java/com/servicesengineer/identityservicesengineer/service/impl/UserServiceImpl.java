@@ -70,12 +70,33 @@ public class UserServiceImpl implements UserService {
         }).collect(Collectors.toList());
     }
     @Override
+    @PreAuthorize("hasRole('ADMIN')")
     public UserResponse addUser(UserRequest userRequest) {
         if (userRepository.findByUsername(userRequest.getUsername()).isPresent()) {
             throw new AppException(ErrorCode.USERNAME_HAS_EXISTED);
         }
         if (!userRequest.getEmail().matches("^[a-zA-Z0-9._%+-]+@gmail\\.com$")) {
             throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
+        }
+        String password = userRequest.getPassword();
+        boolean hasLetter = false;
+        boolean hasDigit = false;
+
+        for (char c : password.toCharArray()) {
+            if (Character.isLetter(c)) {
+                hasLetter = true;
+            } else if (Character.isDigit(c)) {
+                hasDigit = true;
+            }
+        }
+        if (password.length() < 8) {
+            throw new AppException(ErrorCode.PASSWORD_LENGTH_ERROR);
+        }
+        if (!hasLetter) {
+            throw new AppException(ErrorCode.PASSWORD_VALIDATE);
+        }
+        if (!hasDigit) {
+            throw new AppException(ErrorCode.PASSWORD_VALIDATE);
         }
 
         User user = new User();
@@ -198,6 +219,7 @@ public class UserServiceImpl implements UserService {
                 .build();
     }
     @Override
+    @PreAuthorize("hasRole('ADMIN')")
     public UserResponse updateUser (String userId, EditUserRequest request){
         User user = userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         user.setPhoneNumber(request.getPhoneNumber());
@@ -269,6 +291,7 @@ public class UserServiceImpl implements UserService {
                 .build();
     }
     @Override
+    @PreAuthorize("hasRole('ADMIN')")
     public void softDeleteUser(String userId){
         User user = userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         user.setStatus(UserStatus.DELETED);

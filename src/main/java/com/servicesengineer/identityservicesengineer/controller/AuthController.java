@@ -18,7 +18,6 @@ public class AuthController {
     }
     @PostMapping()
     ApiResponse<LoginResponse> login(@RequestBody LoginRequest loginRequest) {
-        System.out.println("🔥🔥🔥 Auth API called");
         ApiResponse apiResponse = ApiResponse.<LoginResponse>builder()
                 .code(200)
                 .message("Login successful")

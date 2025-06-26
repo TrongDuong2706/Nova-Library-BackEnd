@@ -41,5 +41,9 @@ public interface BookRepository extends JpaRepository<Book, String> {
     long countBooks();
 
     Page<Book> findByStock(int stock, Pageable pageable);
+    @Query("SELECT b FROM Book b JOIN b.genre g WHERE LOWER(g.name) LIKE LOWER(CONCAT('%', :genreName, '%'))")
+    Page<Book> findBooksByGenreName(@Param("genreName") String genreName, Pageable pageable);
+    boolean existsByIsbn(String isbn);
+
 
 }

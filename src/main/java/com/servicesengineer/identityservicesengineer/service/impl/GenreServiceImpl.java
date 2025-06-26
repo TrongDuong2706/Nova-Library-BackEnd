@@ -16,6 +16,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -28,6 +29,7 @@ public class GenreServiceImpl implements GenreService {
     GenreRepository genreRepository;
 
     @Override
+    @PreAuthorize("hasRole('ADMIN')")
     public GenreResponse createGenre(GenreRequest request){
         Genre genre = genreMapper.toGenre(request);
         genreRepository.save(genre);
@@ -55,6 +57,7 @@ public class GenreServiceImpl implements GenreService {
     }
 
     @Override
+    @PreAuthorize("hasRole('ADMIN')")
     public GenreResponse updateGenre(String id, GenreRequest request){
         var genre = genreRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.GENRE_NOT_EXISTED));
         genre.setDescription(request.getDescription());
@@ -63,6 +66,7 @@ public class GenreServiceImpl implements GenreService {
         return genreMapper.toGenreResponse(genre);
     }
     @Override
+    @PreAuthorize("hasRole('ADMIN')")
     public String deleteGenre(String id) {
         if (!genreRepository.existsById(id)) {
             throw new AppException(ErrorCode.GENRE_NOT_EXISTED);
