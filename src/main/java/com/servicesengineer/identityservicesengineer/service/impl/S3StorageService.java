@@ -27,8 +27,6 @@ public class S3StorageService implements StorageService {
     @Override
     public String uploadFile(MultipartFile file) throws IOException {
         String key = UUID.randomUUID() + "-" + file.getOriginalFilename();
-
-
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(bucketName)
                 .key(key)

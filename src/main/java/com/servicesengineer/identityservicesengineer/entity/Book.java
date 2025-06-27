@@ -46,10 +46,12 @@ public class Book {
 
     @Column(name = "status")
     private int status;
+
     @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<FavoriteBook> favoritedByUsers = new HashSet<>();
 
     private LocalDate createdAt;
+
     @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Image> images;
 }

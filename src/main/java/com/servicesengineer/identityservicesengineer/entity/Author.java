@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -23,4 +24,7 @@ public class Author {
 
     @Column(name = "bio")
     private String bio;
+    @OneToMany(mappedBy = "author")
+    private List<Book> books;
+
 }

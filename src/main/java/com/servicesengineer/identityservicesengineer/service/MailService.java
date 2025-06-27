@@ -36,8 +36,6 @@ public class MailService {
         for (Borrowing borrowing : borrowingsDueTomorrow) {
             sendReminderEmail(borrowing);
         }
-
-        System.out.println("Đã gửi mail nhắc nhở cho các đơn mượn sắp đến hạn.");
     }
 
     private void sendReminderEmail(Borrowing borrowing) {
@@ -48,7 +46,6 @@ public class MailService {
         message.setText("Chào " + borrowing.getUser().getFirstName() + " "+borrowing.getUser().getLastName()
                 + ",\n\nĐơn mượn sách của bạn sẽ đến hạn vào ngày: " + borrowing.getDueDate()
                 + ".\nVui lòng trả sách đúng hạn để tránh bị quá hạn.\n\nXin cảm ơn!");
-
         mailSender.send(message);
         System.out.println("Đã gửi mail tới: " + borrowing.getUser().getEmail());
     }

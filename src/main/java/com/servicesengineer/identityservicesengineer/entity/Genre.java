@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Entity
 @Table(name = "genres")
 @Data
@@ -19,4 +21,7 @@ public class Genre {
 
     private String name;
     private String description;
+
+    @OneToMany(mappedBy = "genre")
+    private List<Book> books;
 }
