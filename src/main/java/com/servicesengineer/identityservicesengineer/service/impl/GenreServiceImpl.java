@@ -8,12 +8,14 @@ import com.servicesengineer.identityservicesengineer.entity.Genre;
 import com.servicesengineer.identityservicesengineer.exception.AppException;
 import com.servicesengineer.identityservicesengineer.exception.ErrorCode;
 import com.servicesengineer.identityservicesengineer.mapper.GenreMapper;
+import com.servicesengineer.identityservicesengineer.repository.BorrowingRepository;
 import com.servicesengineer.identityservicesengineer.repository.GenreRepository;
 import com.servicesengineer.identityservicesengineer.service.GenreService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,6 +27,7 @@ import org.springframework.stereotype.Service;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class GenreServiceImpl implements GenreService {
 
+
     GenreMapper genreMapper;
     GenreRepository genreRepository;
 
@@ -33,6 +36,7 @@ public class GenreServiceImpl implements GenreService {
     public GenreResponse createGenre(GenreRequest request){
         Genre genre = genreMapper.toGenre(request);
         genreRepository.save(genre);
+
         return genreMapper.toGenreResponse(genre);
     }
     @Override
