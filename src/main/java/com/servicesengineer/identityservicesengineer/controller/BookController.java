@@ -62,11 +62,11 @@ public class BookController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String authorName,
             @RequestParam(required = false) String genreName,
-            @RequestParam(required = false) String title,
-            @RequestParam(required = false) String description) {
+            @RequestParam(required = false) String keyword
+        ) {
 
         int adjustedPage = Math.max(page - 1, 0);
-        var books = bookService.getAllBookWithFilter(authorName, genreName, title, description, adjustedPage, size);
+        var books = bookService.getAllBookWithFilter(authorName, genreName, keyword, adjustedPage, size);
         return ApiResponse.<PaginatedResponse<BookResponse>>builder()
                 .result(books)
                 .build();
@@ -93,11 +93,12 @@ public class BookController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String authorName,
             @RequestParam(required = false) String genreName,
-            @RequestParam(required = false) String title,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String isbn,
             @RequestParam(required = false) Integer status) {
 
         int adjustedPage = Math.max(page - 1, 0);
-        var books = bookService.getAllBookWithAdminFilter(authorName, genreName, title, status, adjustedPage, size);
+        var books = bookService.getAllBookWithAdminFilter(authorName, genreName, keyword, status,isbn, adjustedPage, size);
         return ApiResponse.<PaginatedResponse<BookResponse>>builder()
                 .message("Get Books with filter successful")
                 .result(books)
@@ -123,6 +124,16 @@ public class BookController {
                 .result(bookService.getAllBookWithGenre(genreName,adjustedPage,size))
                 .build();
 
+    }
+    @GetMapping("/getBookByTitle")
+    public ApiResponse<PaginatedResponse<BookResponse>> getAllBookByTitle(@RequestParam String title,
+                                                                          @RequestParam(defaultValue = "1") int page,
+                                                                          @RequestParam(defaultValue = "10") int size){
+        int adjustedPage = Math.max(page - 1, 0);
+        return ApiResponse.<PaginatedResponse<BookResponse>>builder()
+                .message("Get All Book By tile successful")
+                .result(bookService.getAllBookByTitle(title,adjustedPage,size))
+                .build();
     }
 
 }

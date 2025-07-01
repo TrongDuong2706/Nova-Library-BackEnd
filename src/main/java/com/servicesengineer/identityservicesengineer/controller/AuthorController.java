@@ -56,4 +56,14 @@ public class AuthorController {
                 .result(authorService.deleteAuthor(authorId))
                 .build();
     }
+    @GetMapping("/findByName")
+    public ApiResponse<PaginatedResponse<AuthorResponse>> getAllAuthorByName(@RequestParam String keyword,
+                                                          @RequestParam(defaultValue = "1") int page,
+                                                          @RequestParam(defaultValue = "10") int size){
+        int adjustedPage = Math.max(page - 1, 0);
+        return ApiResponse.<PaginatedResponse<AuthorResponse>>builder()
+                .message("Get All Author By Name Successful")
+                .result(authorService.getAllAuthorByName(keyword,adjustedPage, size))
+                .build();
+    }
 }

@@ -26,6 +26,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -231,9 +233,11 @@ public class BookServiceImpl implements BookService {
             throw new AppException(ErrorCode.BOOK_QUANTITY_SMALLER_THAN_ZERO);
         }
 
-        if (bookRepository.existsByIsbn(request.getIsbn())) {
+        Optional<Book> existingBook = bookRepository.findByIsbn(request.getIsbn());
+        if (existingBook.isPresent() && !existingBook.get().getId().equals(bookId)) {
             throw new AppException(ErrorCode.ISBN_VALIDATE);
         }
+
 
         // 3. Cập nhật thông tin cơ bản
         book.setTitle(request.getTitle());
@@ -316,9 +320,9 @@ public class BookServiceImpl implements BookService {
     }
 
     @Override
-    public PaginatedResponse<BookResponse> getAllBookWithFilter(String authorName, String genreName, String title, String description , int page, int size){
+    public PaginatedResponse<BookResponse> getAllBookWithFilter(String authorName, String genreName, String keyword , int page, int size){
         PageRequest pageRequest = PageRequest.of(page, size);
-        Page<Book> books = bookRepository.findByAuthorNameAndGenreNameAndTitleAndDescription(authorName, genreName, title, description, pageRequest);
+        Page<Book> books = bookRepository.findByAuthorNameAndGenreNameAndTitleAndDescription(authorName, genreName, keyword, pageRequest);
         var bookResponse = books.getContent().stream().map(
                 book -> {
                     List<ImageResponse> imageResponses = book.getImages() != null
@@ -375,9 +379,9 @@ public class BookServiceImpl implements BookService {
     }
 
     @Override
-    public PaginatedResponse<BookResponse> getAllBookWithAdminFilter(String authorName, String genreName, String title, Integer status, int page, int size){
+    public PaginatedResponse<BookResponse> getAllBookWithAdminFilter(String authorName, String genreName, String keyword, Integer status,String isbn, int page, int size){
         PageRequest pageRequest = PageRequest.of(page, size);
-        Page<Book> books = bookRepository.findByFilters(authorName, genreName, title, status, pageRequest);
+        Page<Book> books = bookRepository.findByFilters(authorName, genreName, keyword, status, isbn,pageRequest);
         var bookResponse = books.getContent().stream().map(
                 book -> {
                     List<ImageResponse> imageResponses = book.getImages() != null
@@ -475,6 +479,54 @@ public class BookServiceImpl implements BookService {
         PageRequest pageRequest = PageRequest.of(page, size);
         Page<Book> books = bookRepository.findBooksByGenreName(genreName, pageRequest);
 
+        var bookResponse = books.getContent().stream().map(
+                book -> {
+                    List<ImageResponse> imageResponses = book.getImages() != null
+                            ? book.getImages().stream()
+                            .map(image -> ImageResponse.builder()
+                                    .imageUrl(image.getUrl())
+                                    .build())
+                            .toList()
+                            : List.of();
+
+                    AuthorResponse authorResponse = AuthorResponse.builder()
+                            .id(book.getAuthor().getId())
+                            .name(book.getAuthor().getName())
+                            .bio(book.getAuthor().getBio())
+                            .build();
+
+                    GenreResponse genreResponse = GenreResponse.builder()
+                            .id(book.getGenre().getId())
+                            .name(book.getGenre().getName())
+                            .description(book.getGenre().getDescription())
+                            .build();
+
+                    return BookResponse.builder()
+                            .id(book.getId())
+                            .title(book.getTitle())
+                            .description(book.getDescription())
+                            .author(authorResponse)
+                            .genre(genreResponse)
+                            .stock(book.getStock())
+                            .createdAt(book.getCreatedAt())
+                            .images(imageResponses)
+                            .status(book.getStatus())
+                            .isbn(book.getIsbn())
+                            .publicationDate(book.getPublicationDate())
+                            .build();
+                }
+        ).toList();
+
+        return PaginatedResponse.<BookResponse>builder()
+                .elements(bookResponse)
+                .currentPage(books.getNumber())
+                .totalItems((int) books.getTotalElements())
+                .totalPages(books.getTotalPages())
+                .build();
+    }
+    public PaginatedResponse<BookResponse> getAllBookByTitle(String title, int page, int size){
+        PageRequest pageRequest = PageRequest.of(page,size);
+        Page<Book> books = bookRepository.findByTitleContainingIgnoreCase(title, pageRequest);
         var bookResponse = books.getContent().stream().map(
                 book -> {
                     List<ImageResponse> imageResponses = book.getImages() != null

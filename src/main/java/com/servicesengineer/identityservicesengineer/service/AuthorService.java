@@ -12,4 +12,5 @@ public interface AuthorService {
     AuthorResponse getOneAuthor(String id);
     AuthorResponse updateAuthor(String id, AuthorRequest request);
     String deleteAuthor(String id);
+    PaginatedResponse<AuthorResponse> getAllAuthorByName(String keyword, int page, int size);
 }

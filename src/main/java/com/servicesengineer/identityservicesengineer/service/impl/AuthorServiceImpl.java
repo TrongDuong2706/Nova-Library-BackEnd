@@ -76,4 +76,26 @@ public class AuthorServiceImpl implements AuthorService {
         authorRepository.deleteById(id);
         return "Delete Successful";
     }
+    @Override
+    public PaginatedResponse<AuthorResponse> getAllAuthorByName(String keyword, int page, int size){
+        PageRequest pageRequest = PageRequest.of(page, size);
+        Page<Author> authors = authorRepository.findByNameContainingIgnoreCase(keyword, pageRequest);
+
+        List<AuthorResponse> authorResponses = authors
+                .getContent()
+                .stream()
+                .map(authorMapper::toAuthorResponse)
+                .toList();
+
+        return PaginatedResponse.<AuthorResponse>builder()
+                .currentPage(authors.getNumber())
+                .totalPages(authors.getTotalPages())
+                .totalItems((int) authors.getTotalElements())
+                .hasNextPage(authors.hasNext())
+                .hasPreviousPage(authors.hasPrevious())
+                .pageSize(authors.getSize())
+                .elements(authorResponses)
+                .build();
+    }
+
 }
