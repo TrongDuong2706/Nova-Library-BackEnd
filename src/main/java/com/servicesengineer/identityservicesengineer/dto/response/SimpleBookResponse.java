@@ -5,6 +5,7 @@ import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
 @Data
 @NoArgsConstructor
@@ -16,7 +17,7 @@ public class SimpleBookResponse {
     String title;
     String bookId;
     String description;
-    AuthorResponse author;
-    GenreResponse genre;
+    Set<AuthorResponse> authors;
+    Set<GenreResponse> genres;
     List<ImageResponse> images;
 }

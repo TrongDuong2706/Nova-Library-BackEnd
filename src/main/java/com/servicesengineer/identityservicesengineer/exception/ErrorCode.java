@@ -34,7 +34,11 @@ public enum ErrorCode {
     PASSWORD_LENGTH_ERROR(1028, "Mật khẩu phải có ít nhất 8 ký tự", HttpStatus.BAD_REQUEST),
     PASSWORD_VALIDATE(1029, "Mật khẩu phải có cả chữ cả số", HttpStatus.BAD_REQUEST),
     ISBN_VALIDATE(1030, "ISBN không được trùng", HttpStatus.BAD_REQUEST),
+    FAVORITE_NOT_FOUND(1031, "Sách được yêu thích ko tồn tại", HttpStatus.BAD_REQUEST),
+
     ;
+
+
 
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

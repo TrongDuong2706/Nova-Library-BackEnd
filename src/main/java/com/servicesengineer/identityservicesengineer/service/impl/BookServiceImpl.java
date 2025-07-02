@@ -13,6 +13,7 @@ import com.servicesengineer.identityservicesengineer.repository.AuthorRepository
 import com.servicesengineer.identityservicesengineer.repository.BookRepository;
 import com.servicesengineer.identityservicesengineer.repository.GenreRepository;
 import com.servicesengineer.identityservicesengineer.service.BookService;
+import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -24,9 +25,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -37,32 +37,36 @@ public class BookServiceImpl implements BookService {
     S3StorageService s3StorageService;
     AuthorRepository authorRepository;
     GenreRepository genreRepository;
-   // AuthorMapper authorMapper;
+
     @Override
     @PreAuthorize("hasRole('ADMIN')")
+    @Transactional // Đảm bảo tất cả các thao tác đều thành công hoặc rollback
     public BookResponse createBook(BookRequest request, List<MultipartFile> files) {
-        // 1. Tìm Author và Genre
-        Author author = authorRepository.findById(request.getAuthorId())
-                .orElseThrow(() -> new AppException((ErrorCode.AUTHOR_NOT_EXISTED)));
-
-        Genre genre = genreRepository.findById(request.getGenreId())
-                .orElseThrow(() -> new AppException((ErrorCode.GENRE_NOT_EXISTED)));
+        if (bookRepository.existsByIsbn(request.getIsbn())) {
+            throw new AppException(ErrorCode.ISBN_VALIDATE);
+        }
 
         if(request.getStock() < 0){
             throw new AppException(ErrorCode.BOOK_QUANTITY_SMALLER_THAN_ZERO);
         }
 
-        if (bookRepository.existsByIsbn(request.getIsbn())) {
-            throw new AppException(ErrorCode.ISBN_VALIDATE);
+        // 1. Tìm tập hợp các Author và Genre từ IDs
+        Set<Author> authors = new HashSet<>(authorRepository.findAllById(request.getAuthorIds()));
+        if (authors.size() != request.getAuthorIds().size()) {
+            throw new AppException(ErrorCode.AUTHOR_NOT_EXISTED); // Một hoặc nhiều ID tác giả không tồn tại
         }
 
+        Set<Genre> genres = new HashSet<>(genreRepository.findAllById(request.getGenreIds()));
+        if (genres.size() != request.getGenreIds().size()) {
+            throw new AppException(ErrorCode.GENRE_NOT_EXISTED); // Một hoặc nhiều ID thể loại không tồn tại
+        }
 
-        // 2. Tạo Book (chưa gán ảnh)
+        // 2. Tạo Book
         Book book = Book.builder()
                 .title(request.getTitle())
                 .description(request.getDescription())
-                .author(author)
-                .genre(genre)
+                .authors(authors) // Gán tập hợp tác giả
+                .genres(genres)   // Gán tập hợp thể loại
                 .createdAt(java.time.LocalDate.now())
                 .stock(request.getStock())
                 .status(request.getStatus())
@@ -70,198 +74,83 @@ public class BookServiceImpl implements BookService {
                 .publicationDate(request.getPublicationDate())
                 .build();
 
-        // 3. Lưu Book để có ID
+        // 3. Lưu Book để có ID (quan trọng cho quan hệ với Image)
         book = bookRepository.save(book);
-        // 4. Upload ảnh và tạo danh sách Image
-        List<Image> images = new ArrayList<>();
+
+        // 4. Upload ảnh và gán vào sách
         if (files != null && !files.isEmpty()) {
+            List<Image> images = new ArrayList<>();
             for (MultipartFile file : files) {
                 try {
                     String imageUrl = s3StorageService.uploadFile(file);
                     Image image = Image.builder()
                             .url(imageUrl)
-                            .book(book)
+                            .book(book) // Gán sách vừa được lưu
                             .build();
                     images.add(image);
                 } catch (IOException e) {
                     log.error("Error uploading image to S3", e);
+                    // Cân nhắc xóa book đã tạo hoặc có cơ chế xử lý lỗi upload
                     throw new RuntimeException("Upload failed: " + file.getOriginalFilename());
                 }
             }
+            book.setImages(images);
+            book = bookRepository.save(book); // Lưu lại sách với thông tin ảnh
         }
 
-        // 5. Gán danh sách ảnh vào book
-        book.setImages(images);
-
-        // 6. Lưu lại book với ảnh
-        book = bookRepository.save(book);
-
-        // 7. Tạo response cho ảnh
-        List<ImageResponse> imageResponses = images.stream()
-                .map(img -> ImageResponse.builder().imageUrl(img.getUrl()).build())
-                .toList();
-        // 8. Tạo Response cho tác giả
-        AuthorResponse authorResponse = AuthorResponse.builder()
-                .id(author.getId())
-                .bio(author.getBio())
-                .name(author.getName())
-                .build();
-        //9. Tạo Response cho thể loại
-        GenreResponse genreResponse = GenreResponse.builder()
-                .id(genre.getId())
-                .name(genre.getName())
-                .description(genre.getDescription())
-                .build();
-
-        return BookResponse.builder()
-                .id(book.getId())
-                .title(book.getTitle())
-                .description(book.getDescription())
-                .author(authorResponse)
-                .genre(genreResponse)
-                .createdAt(book.getCreatedAt())
-                .images(imageResponses)
-                .stock(book.getStock())
-                .status(book.getStatus())
-                .publicationDate(book.getPublicationDate())
-                .isbn(book.getIsbn())
-                .build();
-    }
-//Get All Book
-    @Override
-    public PaginatedResponse<BookResponse> getAllBook(int page, int size){
-        PageRequest pageRequest = PageRequest.of(page,size);
-        Page<Book> books = bookRepository.findAll(pageRequest);
-
-        var bookResponse = books.getContent().stream().map(
-            book -> {
-                List<ImageResponse> imageResponses = book.getImages() != null
-                        ? book.getImages().stream()
-                        .map(image -> ImageResponse.builder()
-                                .imageUrl(image.getUrl())
-                                .build()).toList() : List.of();
-                //Get Author
-                AuthorResponse authorResponse = AuthorResponse.builder()
-                        .id(book.getAuthor().getId())
-                        .name(book.getAuthor().getName())
-                        .bio(book.getAuthor().getBio())
-                        .build();
-                //Get Genre
-                GenreResponse genreResponse = GenreResponse.builder()
-                        .id(book.getGenre().getId())
-                        .name(book.getGenre().getName())
-                        .description(book.getGenre().getDescription())
-                        .build();
-
-                return BookResponse.builder()
-                        .id(book.getId())
-                        .title(book.getTitle())
-                        .description(book.getDescription())
-                        .author(authorResponse)
-                        .genre(genreResponse)
-                        .stock(book.getStock())
-                        .createdAt(book.getCreatedAt())
-                        .images(imageResponses)
-                        .status(book.getStatus())
-                        .isbn(book.getIsbn())
-                        .publicationDate(book.getPublicationDate())
-                        .build();
-            }
-
-        ).toList();
-        return PaginatedResponse.<BookResponse>builder()
-                .elements(bookResponse)
-                .currentPage(books.getNumber())
-                .totalItems((int) books.getTotalElements())
-                .totalPages(books.getTotalPages())
-                .build();
+        return convertToBookResponse(book);
     }
 
     @Override
-    public BookResponse getOneBook(String id) {
-        Book book = bookRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_EXISTED));
-
-        List<ImageResponse> imageResponses = book.getImages().stream()
-                .map(image -> ImageResponse.builder()
-                        .imageUrl(image.getUrl()) // sửa `getUrl()` thành `getImageUrl()` hoặc đúng field
-                        .build())
-                .toList();
-        //Tạo AuthorResponse
-        AuthorResponse authorResponse = AuthorResponse.builder()
-                .id(book.getAuthor().getId())
-                .bio(book.getAuthor().getBio())
-                .name(book.getAuthor().getName())
-                .build();
-        //Tạo GenreResponse
-        GenreResponse genreResponse = GenreResponse.builder()
-                .id(book.getGenre().getId())
-                .name(book.getGenre().getName())
-                .description(book.getGenre().getDescription())
-                .build();
-
-        return BookResponse.builder()
-                .id(book.getId())
-                .title(book.getTitle())
-                .stock(book.getStock())
-                .status(book.getStatus())
-                .description(book.getDescription())
-                .author(authorResponse)
-                .genre(genreResponse)
-                .createdAt(book.getCreatedAt())
-                .images(imageResponses)
-                .isbn(book.getIsbn())
-                .publicationDate(book.getPublicationDate())
-                .build();
-    }
-
-    //Update Book function
-    @Override
-    @PreAuthorize("hasRole('ADMIN')")
+    @Transactional // Dùng transactional để đảm bảo các lazy-loading hoạt động đúng
     public BookResponse updateBook(String bookId, BookRequest request, List<MultipartFile> files) {
-        // 1. Lấy Book
         Book book = bookRepository.findById(bookId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_EXISTED));
 
-        // 2. Lấy Author và Genre mới nếu cần
-        Author author = authorRepository.findById(request.getAuthorId())
-                .orElseThrow(() -> new AppException(ErrorCode.AUTHOR_NOT_EXISTED));
-        Genre genre = genreRepository.findById(request.getGenreId())
-                .orElseThrow(() -> new AppException(ErrorCode.GENRE_NOT_EXISTED));
+        // Kiểm tra ISBN trùng lặp (trừ chính nó)
+        bookRepository.findByIsbn(request.getIsbn()).ifPresent(existingBook -> {
+            if (!existingBook.getId().equals(bookId)) {
+                throw new AppException(ErrorCode.ISBN_VALIDATE);
+            }
+        });
 
         if(request.getStock() < 0){
             throw new AppException(ErrorCode.BOOK_QUANTITY_SMALLER_THAN_ZERO);
         }
 
-        Optional<Book> existingBook = bookRepository.findByIsbn(request.getIsbn());
-        if (existingBook.isPresent() && !existingBook.get().getId().equals(bookId)) {
-            throw new AppException(ErrorCode.ISBN_VALIDATE);
+        // 1. Tìm tập hợp Author và Genre mới
+        Set<Author> authors = new HashSet<>(authorRepository.findAllById(request.getAuthorIds()));
+        if (authors.size() != request.getAuthorIds().size()) {
+            throw new AppException(ErrorCode.AUTHOR_NOT_EXISTED);
         }
 
+        Set<Genre> genres = new HashSet<>(genreRepository.findAllById(request.getGenreIds()));
+        if (genres.size() != request.getGenreIds().size()) {
+            throw new AppException(ErrorCode.GENRE_NOT_EXISTED);
+        }
 
-        // 3. Cập nhật thông tin cơ bản
+        // 2. Cập nhật thông tin
         book.setTitle(request.getTitle());
         book.setDescription(request.getDescription());
-        book.setAuthor(author);
-        book.setGenre(genre);
+        book.setAuthors(authors);
+        book.setGenres(genres);
         book.setStock(request.getStock());
         book.setStatus(request.getStatus());
         book.setIsbn(request.getIsbn());
         book.setPublicationDate(request.getPublicationDate());
 
-        // 4. Nếu có ảnh mới => Xóa ảnh cũ
+        // 3. Xử lý ảnh (nếu có file mới)
         if (files != null && files.stream().anyMatch(file -> !file.isEmpty())) {
-            // 🔥 Thực sự có ảnh mới ⇒ mới xóa ảnh cũ
-            List<Image> oldImages = book.getImages();
-            if (oldImages != null) {
-                for (Image img : oldImages) {
+            // Xóa ảnh cũ trên S3 và trong DB
+            if (book.getImages() != null) {
+                book.getImages().forEach(img -> {
                     try {
                         s3StorageService.deleteFile(img.getUrl());
                     } catch (Exception e) {
-                        log.error("Error deleting image from S3: {}", img.getUrl(), e);
+                        log.error("Error deleting old image from S3: {}", img.getUrl(), e);
                     }
-                }
-                oldImages.clear();
+                });
+                book.getImages().clear(); // Xóa khỏi collection
             }
 
             // Upload ảnh mới
@@ -270,306 +159,141 @@ public class BookServiceImpl implements BookService {
                 if (!file.isEmpty()) {
                     try {
                         String imageUrl = s3StorageService.uploadFile(file);
-                        Image image = Image.builder()
-                                .url(imageUrl)
-                                .book(book)
-                                .build();
-                        newImages.add(image);
+                        newImages.add(Image.builder().url(imageUrl).book(book).build());
                     } catch (IOException e) {
-                        log.error("Error uploading image to S3", e);
+                        log.error("Error uploading new image to S3", e);
                         throw new RuntimeException("Upload failed: " + file.getOriginalFilename());
                     }
                 }
             }
-            book.getImages().addAll(newImages);
+            book.setImages(newImages);
         }
 
-        // 6. Lưu lại Book
-        book = bookRepository.save(book);
+        Book updatedBook = bookRepository.save(book);
+        return convertToBookResponse(updatedBook);
+    }
 
-        // 7. Trả về BookResponse
-        List<ImageResponse> imageResponses = book.getImages().stream()
-                .map(img -> ImageResponse.builder().imageUrl(img.getUrl()).build())
+    // --- CÁC PHƯƠNG THỨC GET ĐƯỢC ĐƠN GIẢN HÓA ---
+
+    @Override
+    public PaginatedResponse<BookResponse> getAllBook(int page, int size) {
+        Page<Book> booksPage = bookRepository.findAll(PageRequest.of(page, size));
+        return createPaginatedResponse(booksPage);
+    }
+
+    @Override
+    public BookResponse getOneBook(String id) {
+        Book book = bookRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_EXISTED));
+        return convertToBookResponse(book);
+    }
+
+    @Override
+    public PaginatedResponse<BookResponse> getAllBookWithFilter(String authorName, String genreName, String keyword, int page, int size) {
+        Page<Book> booksPage = bookRepository.findByAuthorNameAndGenreNameAndTitleAndDescription(authorName, genreName, keyword, PageRequest.of(page, size));
+        return createPaginatedResponse(booksPage);
+    }
+
+    @Override
+    public PaginatedResponse<BookResponse> getAllBookWithAdminFilter(String authorName, String genreName, String keyword, Integer status, String isbn, int page, int size) {
+        Page<Book> booksPage = bookRepository.findByFilters(authorName, genreName, keyword, status, isbn, PageRequest.of(page, size));
+        return createPaginatedResponse(booksPage);
+    }
+
+    @Override
+    public PaginatedResponse<BookResponse> getAllBookZeroStock(int page, int size) {
+        Page<Book> booksPage = bookRepository.findByStock(0, PageRequest.of(page, size));
+        return createPaginatedResponse(booksPage);
+    }
+
+
+    @Override
+    public PaginatedResponse<BookResponse> getAllBookWithGenre(String genreName, int page, int size) {
+        Page<Book> booksPage = bookRepository.findBooksByGenreName(genreName, PageRequest.of(page, size));
+        return createPaginatedResponse(booksPage);
+    }
+
+    @Override
+    public PaginatedResponse<BookResponse> getAllBookByTitle(String title, int page, int size) {
+        Page<Book> booksPage = bookRepository.findByTitleContainingIgnoreCase(title, PageRequest.of(page, size));
+        return createPaginatedResponse(booksPage);
+    }
+
+    // --- CÁC PHƯƠNG THỨC KHÁC KHÔNG THAY ĐỔI NHIỀU ---
+
+    @Override
+    @PreAuthorize("hasRole('ADMIN')")
+    public void softDelete(String id) {
+        Book book = bookRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_EXISTED));
+        book.setStatus(0); // 0 là trạng thái không hoạt động
+        bookRepository.save(book);
+    }
+
+    @Override
+    public long countActiveBooks() {
+        return bookRepository.countBooks(); // Cần đảm bảo query này đúng ý đồ (ví dụ: chỉ đếm sách có status = 1)
+    }
+
+    // --- HELPER METHODS (PHƯƠNG THỨC HỖ TRỢ) ---
+
+    /**
+     * Phương thức private để chuyển đổi một đối tượng Page<Book> thành PaginatedResponse<BookResponse>.
+     * Giúp tái sử dụng code và làm sạch các phương thức public.
+     */
+    private PaginatedResponse<BookResponse> createPaginatedResponse(Page<Book> booksPage) {
+        List<BookResponse> bookResponses = booksPage.getContent().stream()
+                .map(this::convertToBookResponse)
                 .toList();
-        // 8. Tạo Response cho tác giả
-        AuthorResponse authorResponse = AuthorResponse.builder()
-                .id(author.getId())
-                .bio(author.getBio())
-                .name(author.getName())
+
+        return PaginatedResponse.<BookResponse>builder()
+                .elements(bookResponses)
+                .currentPage(booksPage.getNumber())
+                .totalItems((int) booksPage.getTotalElements())
+                .totalPages(booksPage.getTotalPages())
                 .build();
-        //9. Tạo Response cho thể loại
-        GenreResponse genreResponse = GenreResponse.builder()
-                .id(genre.getId())
-                .name(genre.getName())
-                .description(genre.getDescription())
-                .build();
+    }
+
+    /**
+     * Phương thức private để chuyển đổi một thực thể Book sang BookResponse.
+     * Đây là nơi tập trung logic mapping, giúp các phương thức khác gọn gàng hơn.
+     */
+    private BookResponse convertToBookResponse(Book book) {
+        // Chuyển đổi Set<Author> thành Set<AuthorResponse>
+        Set<AuthorResponse> authorResponses = book.getAuthors().stream()
+                .map(author -> AuthorResponse.builder()
+                        .id(author.getId())
+                        .name(author.getName())
+                        .bio(author.getBio())
+                        .build())
+                .collect(Collectors.toSet());
+
+        // Chuyển đổi Set<Genre> thành Set<GenreResponse>
+        Set<GenreResponse> genreResponses = book.getGenres().stream()
+                .map(genre -> GenreResponse.builder()
+                        .id(genre.getId())
+                        .name(genre.getName())
+                        .description(genre.getDescription())
+                        .build())
+                .collect(Collectors.toSet());
+
+        // Chuyển đổi List<Image> thành List<ImageResponse>
+        List<ImageResponse> imageResponses = book.getImages() != null ?
+                book.getImages().stream()
+                        .map(image -> ImageResponse.builder().imageUrl(image.getUrl()).build())
+                        .toList() : List.of();
 
         return BookResponse.builder()
                 .id(book.getId())
                 .title(book.getTitle())
                 .description(book.getDescription())
-                .status(book.getStatus())
-                .author(authorResponse)
-                .genre(genreResponse)
-                .createdAt(book.getCreatedAt())
+                .authors(authorResponses) // Dùng 'authors' (số nhiều)
+                .genres(genreResponses)   // Dùng 'genres' (số nhiều)
                 .stock(book.getStock())
+                .status(book.getStatus())
+                .createdAt(book.getCreatedAt())
                 .images(imageResponses)
-                .publicationDate(book.getPublicationDate())
                 .isbn(book.getIsbn())
-                .build();
-    }
-
-    @Override
-    public PaginatedResponse<BookResponse> getAllBookWithFilter(String authorName, String genreName, String keyword , int page, int size){
-        PageRequest pageRequest = PageRequest.of(page, size);
-        Page<Book> books = bookRepository.findByAuthorNameAndGenreNameAndTitleAndDescription(authorName, genreName, keyword, pageRequest);
-        var bookResponse = books.getContent().stream().map(
-                book -> {
-                    List<ImageResponse> imageResponses = book.getImages() != null
-                            ? book.getImages().stream()
-                            .map(image -> ImageResponse.builder()
-                                    .imageUrl(image.getUrl())
-                                    .build()).toList() : List.of();
-                    //Get Author
-                    AuthorResponse authorResponse = AuthorResponse.builder()
-                            .id(book.getAuthor().getId())
-                            .name(book.getAuthor().getName())
-                            .bio(book.getAuthor().getBio())
-                            .build();
-                    //Get Genre
-                    GenreResponse genreResponse = GenreResponse.builder()
-                            .id(book.getGenre().getId())
-                            .name(book.getGenre().getName())
-                            .description(book.getGenre().getDescription())
-                            .build();
-
-                    return BookResponse.builder()
-                            .id(book.getId())
-                            .title(book.getTitle())
-                            .description(book.getDescription())
-                            .author(authorResponse)
-                            .genre(genreResponse)
-                            .status(book.getStatus())
-                            .createdAt(book.getCreatedAt())
-                            .stock(book.getStock())
-                            .images(imageResponses)
-                            .isbn(book.getIsbn())
-                            .publicationDate(book.getPublicationDate())
-                            .build();
-                }
-
-        ).toList();
-        return PaginatedResponse.<BookResponse>builder()
-                .elements(bookResponse)
-                .currentPage(books.getNumber())
-                .totalItems((int) books.getTotalElements())
-                .totalPages(books.getTotalPages())
-                .build();
-    }
-    @Override
-    @PreAuthorize("hasRole('ADMIN')")
-    public void softDelete(String id){
-        Book book = bookRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_EXISTED));
-        book.setStatus(0);
-        bookRepository.save(book);
-    }
-    @Override
-    public long countActiveBooks() {
-        return bookRepository.countBooks();
-    }
-
-    @Override
-    public PaginatedResponse<BookResponse> getAllBookWithAdminFilter(String authorName, String genreName, String keyword, Integer status,String isbn, int page, int size){
-        PageRequest pageRequest = PageRequest.of(page, size);
-        Page<Book> books = bookRepository.findByFilters(authorName, genreName, keyword, status, isbn,pageRequest);
-        var bookResponse = books.getContent().stream().map(
-                book -> {
-                    List<ImageResponse> imageResponses = book.getImages() != null
-                            ? book.getImages().stream()
-                            .map(image -> ImageResponse.builder()
-                                    .imageUrl(image.getUrl())
-                                    .build()).toList() : List.of();
-                    //Get Author
-                    AuthorResponse authorResponse = AuthorResponse.builder()
-                            .id(book.getAuthor().getId())
-                            .name(book.getAuthor().getName())
-                            .bio(book.getAuthor().getBio())
-                            .build();
-                    //Get Genre
-                    GenreResponse genreResponse = GenreResponse.builder()
-                            .id(book.getGenre().getId())
-                            .name(book.getGenre().getName())
-                            .description(book.getGenre().getDescription())
-                            .build();
-
-                    return BookResponse.builder()
-                            .id(book.getId())
-                            .title(book.getTitle())
-                            .description(book.getDescription())
-                            .author(authorResponse)
-                            .genre(genreResponse)
-                            .status(book.getStatus())
-                            .createdAt(book.getCreatedAt())
-                            .stock(book.getStock())
-                            .images(imageResponses)
-                            .isbn(book.getIsbn())
-                            .publicationDate(book.getPublicationDate())
-                            .build();
-                }
-
-        ).toList();
-        return PaginatedResponse.<BookResponse>builder()
-                .elements(bookResponse)
-                .currentPage(books.getNumber())
-                .totalItems((int) books.getTotalElements())
-                .totalPages(books.getTotalPages())
-                .build();
-    }
-
-    @Override
-    public PaginatedResponse<BookResponse> getAllBookZeroStock(int page, int size){
-        PageRequest pageRequest = PageRequest.of(page,size);
-        Page<Book> books = bookRepository.findByStock(0, pageRequest);
-        var bookResponse = books.getContent().stream().map(
-                book -> {
-                    List<ImageResponse> imageResponses = book.getImages() != null
-                            ? book.getImages().stream()
-                            .map(image -> ImageResponse.builder()
-                                    .imageUrl(image.getUrl())
-                                    .build()).toList() : List.of();
-                    //Get Author
-                    AuthorResponse authorResponse = AuthorResponse.builder()
-                            .id(book.getAuthor().getId())
-                            .name(book.getAuthor().getName())
-                            .bio(book.getAuthor().getBio())
-                            .build();
-                    //Get Genre
-                    GenreResponse genreResponse = GenreResponse.builder()
-                            .id(book.getGenre().getId())
-                            .name(book.getGenre().getName())
-                            .description(book.getGenre().getDescription())
-                            .build();
-
-                    return BookResponse.builder()
-                            .id(book.getId())
-                            .title(book.getTitle())
-                            .description(book.getDescription())
-                            .author(authorResponse)
-                            .genre(genreResponse)
-                            .stock(book.getStock())
-                            .createdAt(book.getCreatedAt())
-                            .images(imageResponses)
-                            .status(book.getStatus())
-                            .isbn(book.getIsbn())
-                            .publicationDate(book.getPublicationDate())
-                            .build();
-                }
-
-        ).toList();
-        return PaginatedResponse.<BookResponse>builder()
-                .elements(bookResponse)
-                .currentPage(books.getNumber())
-                .totalItems((int) books.getTotalElements())
-                .totalPages(books.getTotalPages())
-                .build();
-    }
-
-    @Override
-    public PaginatedResponse<BookResponse> getAllBookWithGenre(String genreName, int page, int size) {
-        PageRequest pageRequest = PageRequest.of(page, size);
-        Page<Book> books = bookRepository.findBooksByGenreName(genreName, pageRequest);
-
-        var bookResponse = books.getContent().stream().map(
-                book -> {
-                    List<ImageResponse> imageResponses = book.getImages() != null
-                            ? book.getImages().stream()
-                            .map(image -> ImageResponse.builder()
-                                    .imageUrl(image.getUrl())
-                                    .build())
-                            .toList()
-                            : List.of();
-
-                    AuthorResponse authorResponse = AuthorResponse.builder()
-                            .id(book.getAuthor().getId())
-                            .name(book.getAuthor().getName())
-                            .bio(book.getAuthor().getBio())
-                            .build();
-
-                    GenreResponse genreResponse = GenreResponse.builder()
-                            .id(book.getGenre().getId())
-                            .name(book.getGenre().getName())
-                            .description(book.getGenre().getDescription())
-                            .build();
-
-                    return BookResponse.builder()
-                            .id(book.getId())
-                            .title(book.getTitle())
-                            .description(book.getDescription())
-                            .author(authorResponse)
-                            .genre(genreResponse)
-                            .stock(book.getStock())
-                            .createdAt(book.getCreatedAt())
-                            .images(imageResponses)
-                            .status(book.getStatus())
-                            .isbn(book.getIsbn())
-                            .publicationDate(book.getPublicationDate())
-                            .build();
-                }
-        ).toList();
-
-        return PaginatedResponse.<BookResponse>builder()
-                .elements(bookResponse)
-                .currentPage(books.getNumber())
-                .totalItems((int) books.getTotalElements())
-                .totalPages(books.getTotalPages())
-                .build();
-    }
-    public PaginatedResponse<BookResponse> getAllBookByTitle(String title, int page, int size){
-        PageRequest pageRequest = PageRequest.of(page,size);
-        Page<Book> books = bookRepository.findByTitleContainingIgnoreCase(title, pageRequest);
-        var bookResponse = books.getContent().stream().map(
-                book -> {
-                    List<ImageResponse> imageResponses = book.getImages() != null
-                            ? book.getImages().stream()
-                            .map(image -> ImageResponse.builder()
-                                    .imageUrl(image.getUrl())
-                                    .build())
-                            .toList()
-                            : List.of();
-
-                    AuthorResponse authorResponse = AuthorResponse.builder()
-                            .id(book.getAuthor().getId())
-                            .name(book.getAuthor().getName())
-                            .bio(book.getAuthor().getBio())
-                            .build();
-
-                    GenreResponse genreResponse = GenreResponse.builder()
-                            .id(book.getGenre().getId())
-                            .name(book.getGenre().getName())
-                            .description(book.getGenre().getDescription())
-                            .build();
-
-                    return BookResponse.builder()
-                            .id(book.getId())
-                            .title(book.getTitle())
-                            .description(book.getDescription())
-                            .author(authorResponse)
-                            .genre(genreResponse)
-                            .stock(book.getStock())
-                            .createdAt(book.getCreatedAt())
-                            .images(imageResponses)
-                            .status(book.getStatus())
-                            .isbn(book.getIsbn())
-                            .publicationDate(book.getPublicationDate())
-                            .build();
-                }
-        ).toList();
-
-        return PaginatedResponse.<BookResponse>builder()
-                .elements(bookResponse)
-                .currentPage(books.getNumber())
-                .totalItems((int) books.getTotalElements())
-                .totalPages(books.getTotalPages())
+                .publicationDate(book.getPublicationDate())
                 .build();
     }
 

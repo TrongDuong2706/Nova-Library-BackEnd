@@ -7,6 +7,7 @@ import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
 @Data
 @NoArgsConstructor
@@ -16,12 +17,12 @@ import java.util.List;
 public class BookRequest {
     String title;
     String description;
-    String authorId;
-    String genreId;
+    Set<String> authorIds; // Danh sách ID tác giả
+    Set<String> genreIds;
     int stock;
     int status;
     LocalDate publicationDate;
-    @NotBlank( message = "ISBN không được để trống")
+    @NotBlank(message = "ISBN không được để trống")
     @Pattern(regexp = "\\d{13}", message = "ISBN phải gồm 13 chữ số")
     String isbn;
 }

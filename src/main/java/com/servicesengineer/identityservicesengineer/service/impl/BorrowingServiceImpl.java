@@ -27,6 +27,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -39,20 +41,16 @@ public class BorrowingServiceImpl implements BorrowingService {
     FavoriteBookRepository favoriteBookRepository;
 
     @Override
+    @Transactional
     public BorrowingResponse createBorrowing(BorrowingRequest request) {
-        // 1. Lấy User
         User user = userRepository.findByStudentCode(request.getStudentCode())
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
-        boolean hasUnreturnedBorrow = borrowingRepository.existsByUserAndStatusIn(
-                user,
-                List.of(BorrowingStatus.BORROWED, BorrowingStatus.OVERDUE)
-        );
         if(user.getStatus().equals(UserStatus.DELETED)){
             throw new AppException(ErrorCode.DISABLE_ACCOUNT);
         }
 
-        if (hasUnreturnedBorrow) {
+        if (borrowingRepository.existsByUserAndStatusIn(user, List.of(BorrowingStatus.BORROWED, BorrowingStatus.OVERDUE))) {
             throw new AppException(ErrorCode.USER_HAS_UNRETURNED_BORROWING);
         }
 
@@ -60,123 +58,59 @@ public class BorrowingServiceImpl implements BorrowingService {
             throw new AppException(ErrorCode.EXCEED_BOOK_QUANTITY_BORROW);
         }
 
-        //Check hạn mượn không quá 14 ngày
         LocalDate borrowDate = LocalDate.now();
         LocalDate dueDate = request.getDueDate();
-
-        if (dueDate == null || dueDate.isBefore(borrowDate)) {
+        if (dueDate == null || dueDate.isBefore(borrowDate) || ChronoUnit.DAYS.between(borrowDate, dueDate) > 14) {
             throw new AppException(ErrorCode.INVALID_DUE_DATE);
         }
 
-        long days = ChronoUnit.DAYS.between(borrowDate, dueDate);
-        if (days > 14) {
-            throw new AppException(ErrorCode.BORROW_PERIOD_EXCEEDS_LIMIT);
-        }
-
-        // 2. Tạo phiếu mượn mới
         Borrowing borrowing = Borrowing.builder()
-                .borrowDate(LocalDate.now())
-                .dueDate(request.getDueDate())
+                .borrowDate(borrowDate)
+                .dueDate(dueDate)
                 .user(user)
                 .status(BorrowingStatus.BORROWED)
                 .build();
 
-        // 3. Tạo danh sách bản ghi BorrowingRecordItem
         List<BorrowingRecordItem> items = new ArrayList<>();
         for (String bookId : request.getBookIds()) {
             Book book = bookRepository.findById(bookId)
                     .orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_EXISTED));
 
-            if (Objects.isNull(book.getStock()) || book.getStock() <= 0) {
+            if (book.getStock() <= 0) {
                 throw new AppException(ErrorCode.BOOK_OUT_OF_STOCK);
             }
 
-            // Trừ stock
             book.setStock(book.getStock() - 1);
-            bookRepository.save(book); // Lưu thay đổi stock
+            // bookRepository.save(book) sẽ được thực hiện tự động bởi @Transactional
 
-            BorrowingRecordItem item = BorrowingRecordItem.builder()
-                    .book(book)
-                    .borrowing(borrowing)
-                    .build();
+            items.add(BorrowingRecordItem.builder().book(book).borrowing(borrowing).build());
 
-            items.add(item);
+            // Xóa khỏi danh sách yêu thích nếu có
             FavoriteBook favoriteBook = favoriteBookRepository.findByUserAndBook(user, book);
             if (favoriteBook != null) {
                 favoriteBookRepository.delete(favoriteBook);
             }
         }
 
-        borrowing.setItems(items); // Gán danh sách item vào phiếu mượn
+        borrowing.setItems(items);
+        Borrowing savedBorrowing = borrowingRepository.save(borrowing);
 
-
-        // 4. Lưu vào DB
-        borrowing = borrowingRepository.save(borrowing);
-
-        // 5. Tạo danh sách BookResponse từ các item
-        List<BookResponse> bookResponses = borrowing.getItems().stream()
-                .map(item -> {
-                    Book book = item.getBook();
-                    List<ImageResponse> images = book.getImages() != null
-                            ? book.getImages().stream()
-                            .map(img -> ImageResponse.builder().imageUrl(img.getUrl()).build())
-                            .toList() : List.of();
-                    AuthorResponse authorResponse = AuthorResponse.builder()
-                            .id(item.getBook().getAuthor().getId())
-                            .name(item.getBook().getAuthor().getName())
-                            .bio(item.getBook().getAuthor().getBio())
-                            .build();
-                    GenreResponse genreResponse = GenreResponse.builder()
-                            .id(item.getBook().getGenre().getId())
-                            .name(item.getBook().getGenre().getName())
-                            .description(item.getBook().getGenre().getDescription())
-                            .build();
-
-                    return BookResponse.builder()
-                            .id(book.getId())
-                            .title(book.getTitle())
-                            .description(book.getDescription())
-                            .author(authorResponse)
-                            .genre(genreResponse)
-                            .createdAt(book.getCreatedAt())
-                            .images(images)
-                            .publicationDate(book.getPublicationDate())
-                            .isbn(book.getIsbn())
-                            .build();
-                })
-                .toList();
-        //Tạo UserResponse
-        UserResponse userResponse = UserResponse.builder()
-                .firstName(user.getFirstName())
-                .lastName(user.getLastName())
-                .studentCode(user.getStudentCode())
-                .build();
-
-        // 6. Trả về kết quả
-        return BorrowingResponse.builder()
-                .id(borrowing.getId())
-                .borrowDate(borrowing.getBorrowDate())
-                .dueDate(borrowing.getDueDate())
-                .status(borrowing.getStatus())
-                .returnDate(borrowing.getReturnDate())
-                .finalAmount(borrowing.getFinalAmount())
-                .userResponse(userResponse)
-                .books(bookResponses)
-                .build();
+        return convertToBorrowingResponse(savedBorrowing);
     }
 
-    //Hàm trả sách
     @Override
     @Transactional
-    public BorrowingResponse returnBorrow(String borrowId){
-        Borrowing borrowing = borrowingRepository.findById(borrowId).orElseThrow(() -> new AppException(ErrorCode.BORROW_NOT_EXISTED));
-        // 2. Nếu đã trả rồi thì không cho trả lại nữa
+    public BorrowingResponse returnBorrow(String borrowId) {
+        Borrowing borrowing = borrowingRepository.findById(borrowId)
+                .orElseThrow(() -> new AppException(ErrorCode.BORROW_NOT_EXISTED));
+
         if (borrowing.getStatus() == BorrowingStatus.RETURNED) {
             throw new AppException(ErrorCode.BORROWING_ALREADY_RETURNED);
         }
-        //Gán ngày trả là hôm nay
+
         LocalDate today = LocalDate.now();
         borrowing.setReturnDate(today);
+
         if (today.isAfter(borrowing.getDueDate())) {
             long daysLate = ChronoUnit.DAYS.between(borrowing.getDueDate(), today);
             double finePerDay = 30000.0;
@@ -184,362 +118,65 @@ public class BorrowingServiceImpl implements BorrowingService {
         } else {
             borrowing.setFinalAmount(0.0);
         }
-        // ✅ 5. Cộng lại stock cho từng sách
+
         for (BorrowingRecordItem item : borrowing.getItems()) {
             Book book = item.getBook();
-            Integer currentStock = book.getStock();
-            if (currentStock == null) {
-                currentStock = 0;
-            }
-            book.setStock(currentStock + 1);
-            bookRepository.save(book); // Cập nhật stock
+            book.setStock(book.getStock() + 1);
         }
-        // 5. Cập nhật trạng thái
+
         borrowing.setStatus(BorrowingStatus.RETURNED);
-        // 6. Lưu lại
-        borrowing = borrowingRepository.save(borrowing);
+        Borrowing savedBorrowing = borrowingRepository.save(borrowing);
 
-        List<BookResponse> bookResponses = borrowing.getItems().stream().map(
-                item -> {
-                    Book book = item.getBook();
-                    List<ImageResponse> images = book.getImages().stream().map(
-                            img -> ImageResponse.builder()
-                                    .imageUrl(img.getUrl())
-                                    .build()
-
-                    ).toList();
-                    AuthorResponse authorResponse = AuthorResponse.builder()
-                            .id(item.getBook().getAuthor().getId())
-                            .name(item.getBook().getAuthor().getName())
-                            .bio(item.getBook().getAuthor().getBio())
-                            .build();
-                    GenreResponse genreResponse = GenreResponse.builder()
-                            .id(item.getBook().getGenre().getId())
-                            .name(item.getBook().getGenre().getName())
-                            .description(item.getBook().getGenre().getDescription())
-                            .build();
-
-
-                    return BookResponse.builder()
-                            .id(book.getId())
-                            .title(book.getTitle())
-                            .description(book.getDescription())
-                            .author(authorResponse)
-                            .genre(genreResponse)
-                            .createdAt(book.getCreatedAt())
-                            .images(images)
-                            .isbn(book.getIsbn())
-                            .publicationDate(book.getPublicationDate())
-                            .build();
-                }
-        ).toList();
-
-        UserResponse userResponse = UserResponse.builder()
-                .firstName(borrowing.getUser().getFirstName())
-                .lastName(borrowing.getUser().getLastName())
-                .studentCode(borrowing.getUser().getStudentCode())
-                .build();
-
-        return BorrowingResponse.builder()
-                .id(borrowing.getId())
-                .borrowDate(borrowing.getBorrowDate())
-                .dueDate(borrowing.getDueDate())
-                .returnDate(borrowing.getReturnDate())
-                .finalAmount(borrowing.getFinalAmount())
-                .status(borrowing.getStatus())
-                .userResponse(userResponse)
-                .books(bookResponses)
-                .build();
+        return convertToBorrowingResponse(savedBorrowing);
     }
-    //Get All Borrow
+
+    // --- CÁC PHƯƠNG THỨC GET SỬ DỤNG HELPER METHODS ---
+
     @Override
     public PaginatedResponse<BorrowingResponse> getAllBorrow(int page, int size) {
-        PageRequest pageRequest = PageRequest.of(page, size);
-        Page<Borrowing> borrowings = borrowingRepository.findAll(pageRequest);
-
-        List<BorrowingResponse> borrowResponses = borrowings.getContent().stream().map(borrowing -> {
-            List<BookResponse> bookResponses = borrowing.getItems().stream().map(item -> {
-                Book book = item.getBook();
-                List<ImageResponse> images = book.getImages() != null
-                        ? book.getImages().stream()
-                        .map(img -> ImageResponse.builder()
-                                .imageUrl(img.getUrl())
-                                .build())
-                        .toList()
-                        : List.of();
-                AuthorResponse authorResponse = AuthorResponse.builder()
-                        .id(item.getBook().getAuthor().getId())
-                        .name(item.getBook().getAuthor().getName())
-                        .bio(item.getBook().getAuthor().getBio())
-                        .build();
-                GenreResponse genreResponse = GenreResponse.builder()
-                        .id(item.getBook().getGenre().getId())
-                        .name(item.getBook().getGenre().getName())
-                        .description(item.getBook().getGenre().getDescription())
-                        .build();
-
-                return BookResponse.builder()
-                        .id(book.getId())
-                        .title(book.getTitle())
-                        .description(book.getDescription())
-                        .author(authorResponse)
-                        .genre(genreResponse)
-                        .createdAt(book.getCreatedAt())
-                        .images(images)
-                        .publicationDate(book.getPublicationDate())
-                        .isbn(book.getIsbn())
-                        .build();
-            }).toList();
-            UserResponse userResponse = UserResponse.builder()
-                    .firstName(borrowing.getUser().getFirstName())
-                    .lastName(borrowing.getUser().getLastName())
-                    .studentCode(borrowing.getUser().getStudentCode())
-                    .build();
-
-            return BorrowingResponse.builder()
-                    .id(borrowing.getId())
-                    .borrowDate(borrowing.getBorrowDate())
-                    .dueDate(borrowing.getDueDate())
-                    .returnDate(borrowing.getReturnDate())
-                    .finalAmount(borrowing.getFinalAmount())
-                    .status(borrowing.getStatus())
-                    .userResponse(userResponse)
-                    .books(bookResponses)
-                    .build();
-        }).toList();
-
-        return PaginatedResponse.<BorrowingResponse>builder()
-                .totalItems((int) borrowings.getTotalElements())
-                .totalPages(borrowings.getTotalPages())
-                .currentPage(borrowings.getNumber())
-                .pageSize(borrowings.getSize())
-                .hasNextPage(borrowings.hasNext())
-                .hasPreviousPage(borrowings.hasPrevious())
-                .elements(borrowResponses)
-                .build();
+        Page<Borrowing> borrowingsPage = borrowingRepository.findAll(PageRequest.of(page, size));
+        return createPaginatedBorrowingResponse(borrowingsPage);
     }
 
     @Override
     public BorrowingResponse getOneBorrow(String borrowId) {
         Borrowing borrowing = borrowingRepository.findById(borrowId)
                 .orElseThrow(() -> new AppException(ErrorCode.BORROW_NOT_EXISTED));
-
-        // Lấy danh sách sách đã mượn
-        List<BookResponse> bookResponses = borrowing.getItems().stream().map(item -> {
-            Book book = item.getBook();
-            List<ImageResponse> images = book.getImages() != null
-                    ? book.getImages().stream()
-                    .map(img -> ImageResponse.builder()
-                            .imageUrl(img.getUrl())
-                            .build())
-                    .toList()
-                    : List.of();
-
-            AuthorResponse authorResponse = AuthorResponse.builder()
-                    .id(item.getBook().getAuthor().getId())
-                    .name(item.getBook().getAuthor().getName())
-                    .bio(item.getBook().getAuthor().getBio())
-                    .build();
-            GenreResponse genreResponse = GenreResponse.builder()
-                    .id(item.getBook().getGenre().getId())
-                    .name(item.getBook().getGenre().getName())
-                    .description(item.getBook().getGenre().getDescription())
-                    .build();
-
-            return BookResponse.builder()
-                    .id(book.getId())
-                    .title(book.getTitle())
-                    .description(book.getDescription())
-                    .author(authorResponse)
-                    .genre(genreResponse)
-                    .createdAt(book.getCreatedAt())
-                    .images(images)
-                    .isbn(book.getIsbn())
-                    .publicationDate(book.getPublicationDate())
-                    .build();
-        }).toList();
-
-        UserResponse userResponse = UserResponse.builder()
-                .firstName(borrowing.getUser().getFirstName())
-                .lastName(borrowing.getUser().getLastName())
-                .studentCode(borrowing.getUser().getStudentCode())
-                .build();
-
-        return BorrowingResponse.builder()
-                .id(borrowing.getId())
-                .borrowDate(borrowing.getBorrowDate())
-                .dueDate(borrowing.getDueDate())
-                .returnDate(borrowing.getReturnDate())
-                .finalAmount(borrowing.getFinalAmount())
-                .status(borrowing.getStatus())
-                .userResponse(userResponse)
-                .books(bookResponses)
-                .build();
+        return convertToBorrowingResponse(borrowing);
     }
 
     @Override
     public PaginatedResponse<BorrowingResponse> getAllMyBorrow(int page, int size) {
-        // Step 1: Get the current authenticated user's username
-        var context = SecurityContextHolder.getContext();
-        String username = context.getAuthentication().getName();
-
-        // Step 2: Get the user entity using the username
-        User user = userRepository.findByUsername(username)
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        userRepository.findByUsername(username)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
-        // Step 3: Create a PageRequest with pagination information
-        PageRequest pageRequest = PageRequest.of(page, size);
-
-        // Step 4: Fetch borrowings associated with the user
-        Page<Borrowing> borrowings = borrowingRepository.findByUserUsername(username, pageRequest);
-
-        // Step 5: Map the borrowings to BorrowingResponse DTOs
-        List<BorrowingResponse> borrowResponses = borrowings.getContent().stream().map(borrowing -> {
-            List<BookResponse> bookResponses = borrowing.getItems().stream().map(item -> {
-                Book book = item.getBook();
-                List<ImageResponse> images = book.getImages() != null
-                        ? book.getImages().stream()
-                        .map(img -> ImageResponse.builder()
-                                .imageUrl(img.getUrl())
-                                .build())
-                        .toList()
-                        : List.of();
-
-                AuthorResponse authorResponse = AuthorResponse.builder()
-                        .id(item.getBook().getAuthor().getId())
-                        .name(item.getBook().getAuthor().getName())
-                        .bio(item.getBook().getAuthor().getBio())
-                        .build();
-
-                GenreResponse genreResponse = GenreResponse.builder()
-                        .id(item.getBook().getGenre().getId())
-                        .name(item.getBook().getGenre().getName())
-                        .description(item.getBook().getGenre().getDescription())
-                        .build();
-
-                return BookResponse.builder()
-                        .id(book.getId())
-                        .title(book.getTitle())
-                        .description(book.getDescription())
-                        .author(authorResponse)
-                        .genre(genreResponse)
-                        .createdAt(book.getCreatedAt())
-                        .images(images)
-                        .isbn(book.getIsbn())
-                        .publicationDate(book.getPublicationDate())
-                        .build();
-            }).toList();
-
-            UserResponse userResponse = UserResponse.builder()
-                    .firstName(borrowing.getUser().getFirstName())
-                    .lastName(borrowing.getUser().getLastName())
-                    .studentCode(borrowing.getUser().getStudentCode())
-                    .build();
-
-            return BorrowingResponse.builder()
-                    .id(borrowing.getId())
-                    .borrowDate(borrowing.getBorrowDate())
-                    .dueDate(borrowing.getDueDate())
-                    .returnDate(borrowing.getReturnDate())
-                    .finalAmount(borrowing.getFinalAmount())
-                    .status(borrowing.getStatus())
-                    .userResponse(userResponse)
-                    .books(bookResponses)
-                    .build();
-        }).toList();
-
-        // Step 6: Return the PaginatedResponse
-        return PaginatedResponse.<BorrowingResponse>builder()
-                .totalItems((int) borrowings.getTotalElements())
-                .totalPages(borrowings.getTotalPages())
-                .currentPage(borrowings.getNumber())
-                .pageSize(borrowings.getSize())
-                .hasNextPage(borrowings.hasNext())
-                .hasPreviousPage(borrowings.hasPrevious())
-                .elements(borrowResponses)
-                .build();
+        Page<Borrowing> borrowingsPage = borrowingRepository.findByUserUsername(username, PageRequest.of(page, size));
+        return createPaginatedBorrowingResponse(borrowingsPage);
     }
 
-    @Override
-    public long countBorrow(){
-        return borrowingRepository.countBorrowed();
-    }
-    @Override
-    public long countOverdue(){
-        return borrowingRepository.countOverdue();
-    }
     @Override
     public PaginatedResponse<BorrowingResponse> getAllBorrowWithFilter(String id, String name, LocalDate borrowDate, int page, int size) {
-        PageRequest pageRequest = PageRequest.of(page, size);
-        // Gọi repo tìm kiếm
-        Page<Borrowing> borrowings = borrowingRepository.findByBorrowIdAndNameAndBorrowDate(id, name, borrowDate, pageRequest);
-
-        List<BorrowingResponse> borrowResponses = borrowings.getContent().stream().map(borrowing -> {
-            List<BookResponse> bookResponses = borrowing.getItems().stream().map(item -> {
-                Book book = item.getBook();
-                List<ImageResponse> images = book.getImages() != null
-                        ? book.getImages().stream()
-                        .map(img -> ImageResponse.builder()
-                                .imageUrl(img.getUrl())
-                                .build())
-                        .toList()
-                        : List.of();
-
-                AuthorResponse authorResponse = AuthorResponse.builder()
-                        .id(book.getAuthor().getId())
-                        .name(book.getAuthor().getName())
-                        .bio(book.getAuthor().getBio())
-                        .build();
-
-                GenreResponse genreResponse = GenreResponse.builder()
-                        .id(book.getGenre().getId())
-                        .name(book.getGenre().getName())
-                        .description(book.getGenre().getDescription())
-                        .build();
-
-                return BookResponse.builder()
-                        .id(book.getId())
-                        .title(book.getTitle())
-                        .description(book.getDescription())
-                        .author(authorResponse)
-                        .genre(genreResponse)
-                        .createdAt(book.getCreatedAt())
-                        .images(images)
-                        .isbn(book.getIsbn())
-                        .publicationDate(book.getPublicationDate())
-                        .build();
-            }).toList();
-
-            UserResponse userResponse = UserResponse.builder()
-                    .firstName(borrowing.getUser().getFirstName())
-                    .lastName(borrowing.getUser().getLastName())
-                    .studentCode(borrowing.getUser().getStudentCode())
-                    .build();
-
-            return BorrowingResponse.builder()
-                    .id(borrowing.getId())
-                    .borrowDate(borrowing.getBorrowDate())
-                    .dueDate(borrowing.getDueDate())
-                    .returnDate(borrowing.getReturnDate())
-                    .finalAmount(borrowing.getFinalAmount())
-                    .status(borrowing.getStatus())
-                    .userResponse(userResponse)
-                    .books(bookResponses)
-                    .build();
-        }).toList();
-
-        return PaginatedResponse.<BorrowingResponse>builder()
-                .totalItems((int) borrowings.getTotalElements())
-                .totalPages(borrowings.getTotalPages())
-                .currentPage(borrowings.getNumber())
-                .pageSize(borrowings.getSize())
-                .hasNextPage(borrowings.hasNext())
-                .hasPreviousPage(borrowings.hasPrevious())
-                .elements(borrowResponses)
-                .build();
+        Page<Borrowing> borrowingsPage = borrowingRepository.findByBorrowIdAndNameAndBorrowDate(id, name, borrowDate, PageRequest.of(page, size));
+        return createPaginatedBorrowingResponse(borrowingsPage);
     }
 
     @Override
+    public PaginatedResponse<BorrowingResponse> getAllBorrowWithOverdueStatus(int page, int size) {
+        Page<Borrowing> borrowingsPage = borrowingRepository.findByStatus(BorrowingStatus.OVERDUE, PageRequest.of(page, size));
+        return createPaginatedBorrowingResponse(borrowingsPage);
+    }
+
+    @Override
+    public PaginatedResponse<BorrowingResponse> getAllBorrowByUserId(String userId, int page, int size) {
+        Page<Borrowing> borrowingsPage = borrowingRepository.findByUserId(userId, PageRequest.of(page, size));
+        return createPaginatedBorrowingResponse(borrowingsPage);
+    }
+
+    // --- CÁC PHƯƠNG THỨC KHÁC ---
+
+    @Override
+    @Transactional
     public void bookRenewal(String borrowId, BookRenewalRequest bookRenewalRequest) {
         Borrowing borrowing = borrowingRepository.findById(borrowId)
                 .orElseThrow(() -> new AppException(ErrorCode.BORROW_NOT_EXISTED));
@@ -550,14 +187,12 @@ public class BorrowingServiceImpl implements BorrowingService {
         if (borrowing.getStatus() == BorrowingStatus.RETURNED) {
             throw new AppException(ErrorCode.BORROWING_ALREADY_RETURNED);
         }
-
         if (borrowing.getStatus() == BorrowingStatus.OVERDUE) {
             throw new AppException(ErrorCode.OVERDUE_ALREADY);
         }
 
         LocalDate borrowDate = borrowing.getBorrowDate();
         long totalDays = ChronoUnit.DAYS.between(borrowDate, bookRenewalRequest.getNewDueDate());
-
         if (totalDays > 30) {
             throw new AppException(ErrorCode.BORROW_RENEWAL_EXCEEDS_LIMIT);
         }
@@ -565,153 +200,122 @@ public class BorrowingServiceImpl implements BorrowingService {
         borrowing.setDueDate(bookRenewalRequest.getNewDueDate());
         borrowingRepository.save(borrowing);
     }
+
     @Override
-    @Scheduled(cron = "0 0 0 * * ?") // chạy mỗi ngày lúc 0h00
+    @Scheduled(cron = "0 0 0 * * ?")
     @Transactional
     public void updateOverdueStatuses() {
         LocalDate today = LocalDate.now();
-        List<Borrowing> overdueBorrowings = borrowingRepository
-                .findByStatusAndDueDateBefore(BorrowingStatus.BORROWED, today);
-
+        List<Borrowing> overdueBorrowings = borrowingRepository.findByStatusAndDueDateBefore(BorrowingStatus.BORROWED, today);
         for (Borrowing borrowing : overdueBorrowings) {
             borrowing.setStatus(BorrowingStatus.OVERDUE);
         }
-
         borrowingRepository.saveAll(overdueBorrowings);
     }
 
     @Override
-    public PaginatedResponse<BorrowingResponse> getAllBorrowWithOverdueStatus(int page, int size) {
-        PageRequest pageRequest = PageRequest.of(page, size);
-        Page<Borrowing> borrowings = borrowingRepository.findByStatus(BorrowingStatus.OVERDUE, pageRequest);
-
-        List<BorrowingResponse> borrowResponses = borrowings.getContent().stream().map(borrowing -> {
-            List<BookResponse> bookResponses = borrowing.getItems().stream().map(item -> {
-                Book book = item.getBook();
-                List<ImageResponse> images = book.getImages() != null
-                        ? book.getImages().stream()
-                        .map(img -> ImageResponse.builder()
-                                .imageUrl(img.getUrl())
-                                .build())
-                        .toList()
-                        : List.of();
-                AuthorResponse authorResponse = AuthorResponse.builder()
-                        .id(book.getAuthor().getId())
-                        .name(book.getAuthor().getName())
-                        .bio(book.getAuthor().getBio())
-                        .build();
-                GenreResponse genreResponse = GenreResponse.builder()
-                        .id(book.getGenre().getId())
-                        .name(book.getGenre().getName())
-                        .description(book.getGenre().getDescription())
-                        .build();
-
-                return BookResponse.builder()
-                        .id(book.getId())
-                        .title(book.getTitle())
-                        .description(book.getDescription())
-                        .author(authorResponse)
-                        .genre(genreResponse)
-                        .createdAt(book.getCreatedAt())
-                        .images(images)
-                        .publicationDate(book.getPublicationDate())
-                        .isbn(book.getIsbn())
-                        .build();
-            }).toList();
-
-            UserResponse userResponse = UserResponse.builder()
-                    .firstName(borrowing.getUser().getFirstName())
-                    .lastName(borrowing.getUser().getLastName())
-                    .studentCode(borrowing.getUser().getStudentCode())
-                    .build();
-
-            return BorrowingResponse.builder()
-                    .id(borrowing.getId())
-                    .borrowDate(borrowing.getBorrowDate())
-                    .dueDate(borrowing.getDueDate())
-                    .returnDate(borrowing.getReturnDate())
-                    .finalAmount(borrowing.getFinalAmount())
-                    .status(borrowing.getStatus())
-                    .userResponse(userResponse)
-                    .books(bookResponses)
-                    .build();
-        }).toList();
-
-        return PaginatedResponse.<BorrowingResponse>builder()
-                .totalItems((int) borrowings.getTotalElements())
-                .totalPages(borrowings.getTotalPages())
-                .currentPage(borrowings.getNumber())
-                .pageSize(borrowings.getSize())
-                .hasNextPage(borrowings.hasNext())
-                .hasPreviousPage(borrowings.hasPrevious())
-                .elements(borrowResponses)
-                .build();
+    public long countBorrow() {
+        return borrowingRepository.countBorrowed();
     }
+
     @Override
-    public PaginatedResponse<BorrowingResponse> getAllBorrowByUserId(String userId, int page, int size){
-        PageRequest pageRequest = PageRequest.of(page, size);
-        Page<Borrowing> borrowings = borrowingRepository.findByUserId(userId, pageRequest);
-        List<BorrowingResponse> borrowResponses = borrowings.getContent().stream().map(borrowing -> {
-            List<BookResponse> bookResponses = borrowing.getItems().stream().map(item -> {
-                Book book = item.getBook();
-                List<ImageResponse> images = book.getImages() != null
-                        ? book.getImages().stream()
-                        .map(img -> ImageResponse.builder()
-                                .imageUrl(img.getUrl())
-                                .build())
-                        .toList()
-                        : List.of();
-                AuthorResponse authorResponse = AuthorResponse.builder()
-                        .id(book.getAuthor().getId())
-                        .name(book.getAuthor().getName())
-                        .bio(book.getAuthor().getBio())
-                        .build();
-                GenreResponse genreResponse = GenreResponse.builder()
-                        .id(book.getGenre().getId())
-                        .name(book.getGenre().getName())
-                        .description(book.getGenre().getDescription())
-                        .build();
+    public long countOverdue() {
+        return borrowingRepository.countOverdue();
+    }
 
-                return BookResponse.builder()
-                        .id(book.getId())
-                        .title(book.getTitle())
-                        .description(book.getDescription())
-                        .author(authorResponse)
-                        .genre(genreResponse)
-                        .createdAt(book.getCreatedAt())
-                        .images(images)
-                        .publicationDate(book.getPublicationDate())
-                        .isbn(book.getIsbn())
-                        .build();
-            }).toList();
+    // =================================================================
+    //  HELPER METHODS (PHƯƠNG THỨC HỖ TRỢ)
+    // =================================================================
 
-            UserResponse userResponse = UserResponse.builder()
-                    .firstName(borrowing.getUser().getFirstName())
-                    .lastName(borrowing.getUser().getLastName())
-                    .studentCode(borrowing.getUser().getStudentCode())
-                    .build();
-
-            return BorrowingResponse.builder()
-                    .id(borrowing.getId())
-                    .borrowDate(borrowing.getBorrowDate())
-                    .dueDate(borrowing.getDueDate())
-                    .returnDate(borrowing.getReturnDate())
-                    .finalAmount(borrowing.getFinalAmount())
-                    .status(borrowing.getStatus())
-                    .userResponse(userResponse)
-                    .books(bookResponses)
-                    .build();
-        }).toList();
+    /**
+     * Chuyển đổi một Page<Borrowing> thành PaginatedResponse<BorrowingResponse>.
+     */
+    private PaginatedResponse<BorrowingResponse> createPaginatedBorrowingResponse(Page<Borrowing> borrowingsPage) {
+        List<BorrowingResponse> borrowingResponses = borrowingsPage.getContent().stream()
+                .map(this::convertToBorrowingResponse)
+                .toList();
 
         return PaginatedResponse.<BorrowingResponse>builder()
-                .totalItems((int) borrowings.getTotalElements())
-                .totalPages(borrowings.getTotalPages())
-                .currentPage(borrowings.getNumber())
-                .pageSize(borrowings.getSize())
-                .hasNextPage(borrowings.hasNext())
-                .hasPreviousPage(borrowings.hasPrevious())
-                .elements(borrowResponses)
+                .elements(borrowingResponses)
+                .currentPage(borrowingsPage.getNumber())
+                .totalPages(borrowingsPage.getTotalPages())
+                .totalItems((int) borrowingsPage.getTotalElements())
+                .pageSize(borrowingsPage.getSize())
+                .hasNextPage(borrowingsPage.hasNext())
+                .hasPreviousPage(borrowingsPage.hasPrevious())
                 .build();
     }
 
+    /**
+     * Chuyển đổi một thực thể Borrowing thành BorrowingResponse.
+     * Đây là nơi tập trung logic mapping chính.
+     */
+    private BorrowingResponse convertToBorrowingResponse(Borrowing borrowing) {
+        User user = borrowing.getUser();
+        UserResponse userResponse = UserResponse.builder()
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .studentCode(user.getStudentCode())
+                .build();
+
+        List<BookResponse> bookResponses = borrowing.getItems().stream()
+                .map(item -> convertToBookResponse(item.getBook()))
+                .toList();
+
+        return BorrowingResponse.builder()
+                .id(borrowing.getId())
+                .borrowDate(borrowing.getBorrowDate())
+                .dueDate(borrowing.getDueDate())
+                .returnDate(borrowing.getReturnDate())
+                .status(borrowing.getStatus())
+                .finalAmount(borrowing.getFinalAmount())
+                .userResponse(userResponse)
+                .books(bookResponses)
+                .build();
+    }
+
+    /**
+     * Chuyển đổi một thực thể Book thành BookResponse.
+     * Phương thức này đã được cập nhật để xử lý ManyToMany.
+     */
+    private BookResponse convertToBookResponse(Book book) {
+        // --- SỬA ĐỔI Ở ĐÂY ---
+        // Chuyển đổi Set<Author> thành Set<AuthorResponse>
+        Set<AuthorResponse> authorResponses = book.getAuthors().stream()
+                .map(author -> AuthorResponse.builder()
+                        .id(author.getId())
+                        .name(author.getName())
+                        .bio(author.getBio())
+                        .build())
+                .collect(Collectors.toSet());
+
+        // Chuyển đổi Set<Genre> thành Set<GenreResponse>
+        Set<GenreResponse> genreResponses = book.getGenres().stream()
+                .map(genre -> GenreResponse.builder()
+                        .id(genre.getId())
+                        .name(genre.getName())
+                        .description(genre.getDescription())
+                        .build())
+                .collect(Collectors.toSet());
+
+        List<ImageResponse> imageResponses = (book.getImages() != null)
+                ? book.getImages().stream()
+                .map(img -> ImageResponse.builder().imageUrl(img.getUrl()).build())
+                .toList()
+                : List.of();
+
+        return BookResponse.builder()
+                .id(book.getId())
+                .title(book.getTitle())
+                .description(book.getDescription())
+                .authors(authorResponses) // Thay vì author
+                .genres(genreResponses)   // Thay vì genre
+                .createdAt(book.getCreatedAt())
+                .images(imageResponses)
+                .publicationDate(book.getPublicationDate())
+                .isbn(book.getIsbn())
+                .stock(book.getStock()) // Thêm stock để dễ theo dõi
+                .status(book.getStatus()) // Thêm status
+                .build();
+    }
 }

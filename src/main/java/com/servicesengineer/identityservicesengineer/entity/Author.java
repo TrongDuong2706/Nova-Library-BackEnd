@@ -1,20 +1,20 @@
 package com.servicesengineer.identityservicesengineer.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
 @Table(name = "authors")
-@Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Getter
+@Setter
 public class Author {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -24,7 +24,7 @@ public class Author {
 
     @Column(name = "bio")
     private String bio;
-    @OneToMany(mappedBy = "author")
-    private List<Book> books;
+    @ManyToMany(mappedBy = "authors" ) // "authors" là tên trường trong class Book
+    private Set<Book> books = new HashSet<>();
 
 }

@@ -1,10 +1,7 @@
 package com.servicesengineer.identityservicesengineer.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDate;
 import java.util.HashSet;
@@ -13,10 +10,11 @@ import java.util.Set;
 
 @Entity
 @Table(name = "books")
-@Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Getter
+@Setter
 public class Book {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -33,13 +31,22 @@ public class Book {
     @Column(name = "publication_date")
     private LocalDate publicationDate;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "author_id")
-    private Author author;
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "book_authors", // Tên bảng trung gian
+            joinColumns = @JoinColumn(name = "book_id"), // Khóa ngoại trỏ tới Book
+            inverseJoinColumns = @JoinColumn(name = "author_id") // Khóa ngoại trỏ tới Author
+    )
+    private Set<Author> authors = new HashSet<>();
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "genre_id")
-    private Genre genre;
+    // --- THAY ĐỔI Ở ĐÂY: Từ ManyToOne thành ManyToMany ---
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "book_genres", // Tên bảng trung gian
+            joinColumns = @JoinColumn(name = "book_id"), // Khóa ngoại trỏ tới Book
+            inverseJoinColumns = @JoinColumn(name = "genre_id") // Khóa ngoại trỏ tới Genre
+    )
+    private Set<Genre> genres = new HashSet<>();
 
     @Column(name ="stock")
     private int stock;

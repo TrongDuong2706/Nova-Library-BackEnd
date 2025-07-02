@@ -12,9 +12,10 @@ import java.util.Optional;
 
 public interface BookRepository extends JpaRepository<Book, String> {
 
-    @Query(value = "SELECT b FROM Book b " +
-            "JOIN b.author a " +
-            "JOIN b.genre g " +
+    // --- SỬA ĐỔI QUERY ---
+    @Query(value = "SELECT DISTINCT b FROM Book b " +
+            "LEFT JOIN b.authors a " + // JOIN với collection authors
+            "LEFT JOIN b.genres g " +  // JOIN với collection genres
             "WHERE (:authorName IS NULL OR a.name LIKE %:authorName%) " +
             "AND (:genreName IS NULL OR g.name LIKE %:genreName%) " +
             "AND (:keyword IS NULL OR b.title LIKE %:keyword% OR b.description LIKE %:keyword%) " +
@@ -23,11 +24,12 @@ public interface BookRepository extends JpaRepository<Book, String> {
             @Param("authorName") String authorName,
             @Param("genreName") String genreName,
             @Param("keyword") String keyword,
-             Pageable pageable);
+            Pageable pageable);
 
-    @Query(value = "SELECT b FROM Book b " +
-            "JOIN b.author a " +
-            "JOIN b.genre g " +
+    // --- SỬA ĐỔI QUERY ---
+    @Query(value = "SELECT DISTINCT b FROM Book b " +
+            "LEFT JOIN b.authors a " + // JOIN với collection authors
+            "LEFT JOIN b.genres g " +  // JOIN với collection genres
             "WHERE (:authorName IS NULL OR a.name LIKE %:authorName%) " +
             "AND (:genreName IS NULL OR g.name LIKE %:genreName%) " +
             "AND (:keyword IS NULL OR b.title LIKE %:keyword% OR b.description LIKE %:keyword%) " +
@@ -47,13 +49,24 @@ public interface BookRepository extends JpaRepository<Book, String> {
 
     Page<Book> findByStock(int stock, Pageable pageable);
 
-    @Query("SELECT b FROM Book b JOIN b.genre g WHERE LOWER(g.name) LIKE LOWER(CONCAT('%', :genreName, '%'))")
+    // --- SỬA ĐỔI QUERY ---
+    @Query("SELECT b FROM Book b JOIN b.genres g WHERE LOWER(g.name) LIKE LOWER(CONCAT('%', :genreName, '%'))")
     Page<Book> findBooksByGenreName(@Param("genreName") String genreName, Pageable pageable);
+
     boolean existsByIsbn(String isbn);
 
     Optional<Book> findByIsbn(String isbn);
 
     Page<Book> findByTitleContainingIgnoreCase(String title, Pageable pageable);
+
+//    @Query(value = "SELECT b FROM Book b " +
+//            "LEFT JOIN FETCH b.authors " +
+//            "LEFT JOIN FETCH b.genres",
+//            countQuery = "SELECT COUNT(b) FROM Book b") // Query đếm tổng số bản ghi để phân trang đúng
+//    @Override
+//    Page<Book> findAll(Pageable pageable);
+
+
 
 
 }

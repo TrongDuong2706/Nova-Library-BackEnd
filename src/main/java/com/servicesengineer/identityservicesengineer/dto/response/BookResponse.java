@@ -5,6 +5,7 @@ import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
 @Data
 @NoArgsConstructor
@@ -15,8 +16,8 @@ public class BookResponse {
     String id;
     String title;
     String description;
-    AuthorResponse author;
-    GenreResponse genre;
+    Set<AuthorResponse> authors; // Giả sử bạn có AuthorResponse DTO
+    Set<GenreResponse> genres;
     LocalDate createdAt;
     int stock;
     int status;
