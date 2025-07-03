@@ -22,7 +22,7 @@ public interface BookService {
 
     long countActiveBooks();
 
-    PaginatedResponse<BookResponse> getAllBookWithAdminFilter(String authorName, String genreName, String title, Integer status, int page, int size);
+    PaginatedResponse<BookResponse> getAllBookWithAdminFilter(String authorName, String genreName, String title, Integer status,String isbn, int page, int size);
 
     PaginatedResponse<BookResponse> getAllBookZeroStock(int page, int size);
 

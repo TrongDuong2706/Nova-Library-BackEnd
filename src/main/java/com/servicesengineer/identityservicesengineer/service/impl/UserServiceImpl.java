@@ -70,7 +70,6 @@ public class UserServiceImpl implements UserService {
         }).collect(Collectors.toList());
     }
     @Override
-    @PreAuthorize("hasRole('ADMIN')")
     public UserResponse addUser(UserRequest userRequest) {
         if (userRepository.findByUsername(userRequest.getUsername()).isPresent()) {
             throw new AppException(ErrorCode.USERNAME_HAS_EXISTED);

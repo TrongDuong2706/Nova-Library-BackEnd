@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Optional;
+
 public interface BookRepository extends JpaRepository<Book, String> {
 
     @Query(value = "SELECT b FROM Book b " +
@@ -29,12 +31,14 @@ public interface BookRepository extends JpaRepository<Book, String> {
             "WHERE (:authorName IS NULL OR a.name LIKE %:authorName%) " +
             "AND (:genreName IS NULL OR g.name LIKE %:genreName%) " +
             "AND (:title IS NULL OR b.title LIKE %:title%) " +
-            "AND (:status IS NULL OR b.status = :status)")
+            "AND (:status IS NULL OR b.status = :status)"+
+            "AND (:isbn IS NULL OR b.isbn LIKE %:isbn%)")
     Page<Book> findByFilters(
             @Param("authorName") String authorName,
             @Param("genreName") String genreName,
             @Param("title") String title,
             @Param("status") Integer status,
+            @Param("isbn") String isbn,
             Pageable pageable);
 
     @Query("SELECT COUNT(b) FROM Book b")
@@ -45,6 +49,6 @@ public interface BookRepository extends JpaRepository<Book, String> {
     @Query("SELECT b FROM Book b JOIN b.genre g WHERE LOWER(g.name) LIKE LOWER(CONCAT('%', :genreName, '%'))")
     Page<Book> findBooksByGenreName(@Param("genreName") String genreName, Pageable pageable);
     boolean existsByIsbn(String isbn);
-
+    Optional<Book> findByIsbn(String isbn);
 
 }

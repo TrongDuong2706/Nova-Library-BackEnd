@@ -231,9 +231,12 @@ public class BookServiceImpl implements BookService {
             throw new AppException(ErrorCode.BOOK_QUANTITY_SMALLER_THAN_ZERO);
         }
 
-        if (bookRepository.existsByIsbn(request.getIsbn())) {
-            throw new AppException(ErrorCode.ISBN_VALIDATE);
-        }
+        // Kiểm tra ISBN trùng lặp (trừ chính nó)
+        bookRepository.findByIsbn(request.getIsbn()).ifPresent(existingBook -> {
+            if (!existingBook.getId().equals(bookId)) {
+                throw new AppException(ErrorCode.ISBN_VALIDATE);
+            }
+        });
 
         // 3. Cập nhật thông tin cơ bản
         book.setTitle(request.getTitle());
@@ -375,9 +378,9 @@ public class BookServiceImpl implements BookService {
     }
 
     @Override
-    public PaginatedResponse<BookResponse> getAllBookWithAdminFilter(String authorName, String genreName, String title, Integer status, int page, int size){
+    public PaginatedResponse<BookResponse> getAllBookWithAdminFilter(String authorName, String genreName, String title, Integer status, String isbn, int page, int size){
         PageRequest pageRequest = PageRequest.of(page, size);
-        Page<Book> books = bookRepository.findByFilters(authorName, genreName, title, status, pageRequest);
+        Page<Book> books = bookRepository.findByFilters(authorName, genreName, title, status,isbn ,pageRequest);
         var bookResponse = books.getContent().stream().map(
                 book -> {
                     List<ImageResponse> imageResponses = book.getImages() != null
