@@ -24,7 +24,7 @@ public class Author {
 
     @Column(name = "bio")
     private String bio;
-    @ManyToMany(mappedBy = "authors" ) // "authors" là tên trường trong class Book
+    @ManyToMany(mappedBy = "authors" )
     private Set<Book> books = new HashSet<>();
 
 }

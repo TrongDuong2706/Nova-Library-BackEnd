@@ -22,6 +22,6 @@ public class Genre {
     private String name;
     private String description;
 
-    @ManyToMany(mappedBy = "genres") // "genres" là tên trường trong class Book
+    @ManyToMany(mappedBy = "genres")
     private Set<Book> books = new HashSet<>();
 }
