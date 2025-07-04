@@ -1,17 +1,48 @@
 pipeline {
     agent { label 'lab-server' }
 
+    environment {
+        JAR_NAME = "target/identityservicesengineer-0.0.1-SNAPSHOT.jar"
+        PROCESS_NAME = "identityservicesengineer-0.0.1-SNAPSHOT.jar"
+    }
+
     stages {
-        stage('Run basic shell commands') {
+        stage('Pull latest code') {
             steps {
-                echo 'Running pwd'
-                sh 'pwd'
+                echo '📥 Pull latest code từ GitHub (đã làm tự động)'
+                sh 'pwd && ls -la'
+            }
+        }
 
-                echo 'Running whoami'
-                sh 'whoami'
+        stage('Build project') {
+            steps {
+                echo '⚙️ Building project bằng Maven...'
+                sh 'mvn clean install -DskipTests=true'
+            }
+        }
 
-                echo 'Running ls -a'
-                sh 'ls -a'
+        stage('Stop old process') {
+            steps {
+                echo '🛑 Đang dừng process cũ (nếu có)...'
+                sh '''
+                    PID=$(ps -ef | grep $PROCESS_NAME | grep -v grep | awk '{print $2}')
+                    if [ ! -z "$PID" ]; then
+                        kill -9 $PID
+                        echo "Đã kill PID $PID"
+                    else
+                        echo "Không tìm thấy process đang chạy"
+                    fi
+                '''
+            }
+        }
+
+        stage('Run new jar in background') {
+            steps {
+                echo '🚀 Đang chạy lại app dưới nền...'
+                sh '''
+                    nohup java -jar $JAR_NAME > app.log 2>&1 &
+                    echo "App đang chạy lại dưới nền!"
+                '''
             }
         }
     }

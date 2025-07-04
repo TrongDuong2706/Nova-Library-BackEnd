@@ -33,4 +33,5 @@ public class AuthController {
                 .result(null)
                 .build();
     }
+
 }
