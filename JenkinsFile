@@ -2,6 +2,8 @@ pipeline {
     agent { label 'lab-server' }
 
     environment {
+        M2_HOME = "/opt/maven"
+        PATH = "${M2_HOME}/bin:${env.PATH}"
         JAR_NAME = "target/identityservicesengineer-0.0.1-SNAPSHOT.jar"
         PROCESS_NAME = "identityservicesengineer-0.0.1-SNAPSHOT.jar"
     }
@@ -17,7 +19,10 @@ pipeline {
         stage('Build project') {
             steps {
                 echo '⚙️ Building project bằng Maven...'
-                sh 'mvn clean install -DskipTests=true'
+                sh '''
+                    mvn -v
+                    mvn clean install -DskipTests=true
+                '''
             }
         }
 
@@ -25,7 +30,7 @@ pipeline {
             steps {
                 echo '🛑 Đang dừng process cũ (nếu có)...'
                 sh '''
-                    PID=$(ps -ef | grep $PROCESS_NAME | grep -v grep | awk '{print $2}')
+                    PID=$(ps -ef | grep "$PROCESS_NAME" | grep -v grep | awk '{print $2}')
                     if [ ! -z "$PID" ]; then
                         kill -9 $PID
                         echo "Đã kill PID $PID"
