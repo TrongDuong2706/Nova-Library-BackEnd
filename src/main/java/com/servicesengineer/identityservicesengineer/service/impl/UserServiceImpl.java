@@ -81,6 +81,9 @@ public class UserServiceImpl implements UserService {
         boolean hasLetter = false;
         boolean hasDigit = false;
 
+        String firstName = userRequest.getFirstName().trim();
+        String lastName = userRequest.getLastName().trim();
+
         for (char c : password.toCharArray()) {
             if (Character.isLetter(c)) {
                 hasLetter = true;
@@ -101,8 +104,8 @@ public class UserServiceImpl implements UserService {
         User user = new User();
         user.setUsername(userRequest.getUsername());
         user.setPassword(passwordEncoder.encode(userRequest.getPassword()));
-        user.setFirstName(userRequest.getFirstName());
-        user.setLastName(userRequest.getLastName());
+        user.setFirstName(firstName);
+        user.setLastName(lastName);
         user.setStudentCode(generateStudentCode());
         user.setEmail(userRequest.getEmail());
         user.setPhoneNumber(userRequest.getPhoneNumber());
