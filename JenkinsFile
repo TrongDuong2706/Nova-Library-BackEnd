@@ -1,0 +1,18 @@
+pipeline {
+    agent { label 'lab-server' }
+
+    stages {
+        stage('Run basic shell commands') {
+            steps {
+                echo 'Running pwd'
+                sh 'pwd'
+
+                echo 'Running whoami'
+                sh 'whoami'
+
+                echo 'Running ls -a'
+                sh 'ls -a'
+            }
+        }
+    }
+}
