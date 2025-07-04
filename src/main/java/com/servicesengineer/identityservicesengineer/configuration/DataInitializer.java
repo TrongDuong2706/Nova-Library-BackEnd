@@ -21,10 +21,7 @@ public class DataInitializer {
                                PasswordEncoder passwordEncoder) {
         return args -> {
             // Tạo 2 role nếu chưa có
-            Role userRole = roleRepository.findById("USER")
-                    .orElseGet(() -> roleRepository.save(
-                            Role.builder().name("USER").description("Người dùng").build()
-                    ));
+
 
             Role adminRole = roleRepository.findById("ADMIN")
                     .orElseGet(() -> roleRepository.save(
