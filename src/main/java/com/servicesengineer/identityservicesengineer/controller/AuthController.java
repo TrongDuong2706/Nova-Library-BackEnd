@@ -33,5 +33,9 @@ public class AuthController {
                 .result(null)
                 .build();
     }
+    @GetMapping("/testJenkins")
+    public String testJenkins(){
+        return "Hello Jenkins";
+    }
 
 }
