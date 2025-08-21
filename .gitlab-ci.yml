@@ -1,0 +1,46 @@
+variables:
+  USER_PROJECT: "onlineshop"
+  DOCKERHUB_USER: "duongtrong27"      
+  IMAGE_NAME: "library"               
+  IMAGE_VERSION: "${DOCKERHUB_USER}/${IMAGE_NAME}:${CI_COMMIT_REF_NAME}_${CI_COMMIT_SHORT_SHA}"
+
+before_script:
+  - docker login -u "$DOCKERHUB_USER" -p "$DOCKERHUB_PASSWORD"
+stages:
+  - build
+  - push
+  - deploy
+
+build:
+  stage: build
+  variables:
+    GIT_STRATEGY: clone
+  script:
+    - docker build -t $IMAGE_VERSION .
+  tags:
+    - online-shop-runner-dev-shell
+  only:
+    - tags
+
+push:
+  stage: push
+  variables:
+    GIT_STRATEGY: clone
+  script:
+    - docker push $IMAGE_VERSION
+  tags:
+    - online-shop-runner-dev-shell
+  only:
+    - tags
+
+deploy:
+  stage: deploy
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - docker pull $IMAGE_VERSION
+    - sudo su ${USER_PROJECT} -c "docker rm -f $CI_PROJECT_NAME; docker run --name $CI_PROJECT_NAME -dp $BE_PORT $IMAGE_VERSION"
+  tags:
+    - online-shop-runner-dev-shell
+  only:
+    - tags
